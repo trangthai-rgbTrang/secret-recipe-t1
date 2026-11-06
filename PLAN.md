@@ -19,11 +19,11 @@ Win: at least 1 herb left at 0:00. Lose: all 11 herbs stolen before 0:00. Score:
 ## MVP: must ship (5 items max, in build order; playable after item 3)
 | # | Item | Owner | Minutes | Done when |
 |---|------|-------|---------|-----------|
-| 1 | Title screen told in pictures, no sentences: 🕵️ ➜ 🔐📜 ❌ · 👆🕵️ ✅ · 👆🧑‍🍳 ❌ · ⏱ 60; name field with 👤; big ▶ button; fan-made notice; 60 s countdown; end screen with ↻ restart | Trang | 9 | A first-time player can say what the game is about from the pictures alone, without reading |
-| 2 | Vault labelled "SECRET RECIPE" + card with 11 herbs; spies walk from 6 doors; on arrival a herb flies from the card to the spy, who runs back out; 0 herbs = lose | My | 10 | Doing nothing shows herbs flying away one by one and ends in "Recipe stolen!" |
-| 3 | Tap a spy +10. Each spy that gets in leaves a hole 🕳️ in the vault; a cook carrying 🔧 walks from a door to the hole (green dotted line) and patches it (green progress ring), +5. Tapping a cook = −50 and the hole stays open. First 5 s are a guided wave in pictures: a bouncing 👆 over one slow spy, then a 🚫 over the first cook | Trang | 11 | A first-time player catches a spy, leaves the 🔧 cook alone and sees the hole close, without anyone explaining and without reading |
-| 4 | A new wave every 15 s with an icon banner (⚡🕵️🕵️); last 10 s RUSH (red pulse, big ⏱) | My | 3 | Banners show at 0:45, 0:30, 0:15 and spies are clearly faster each time |
-| 5 | Local top 10 by name; end screen in icons (🌿 × 100, 🕵️ × 10, 🧑‍🍳 −50) with the rank as 🏆 #2 | Trang | 6 | Two different names both appear in the top 10 after a reload, in score order |
+| 1 | ✅ Title screen told in pictures, no sentences: 🕵️ ➜ 🔐📜 ❌ · 👆🕵️ ✅ · 👆🧑‍🍳 ❌ · ⏱ 60; name field with 👤; big ▶ button; fan-made notice; 60 s countdown; end screen with ↻ restart | Trang | 9 | A first-time player can say what the game is about from the pictures alone, without reading |
+| 2 | ✅ Vault labelled "SECRET RECIPE" + card with 11 herbs; spies walk from 6 doors; on arrival a herb flies from the card to the spy, who runs back out; 0 herbs = lose | My | 10 | Doing nothing shows herbs flying away one by one and ends in "Recipe stolen!" |
+| 3 | ✅ Tap a spy +10. Each spy that gets in leaves a hole 🕳️ in the vault; a cook carrying 🔧 walks from a door to the hole (green dotted line) and patches it (green progress ring), +5. Tapping a cook = −50 and the hole stays open. First 5 s are a guided wave in pictures: a bouncing 👆 over one slow spy, then a 🚫 over the first cook | Trang | 11 | A first-time player catches a spy, leaves the 🔧 cook alone and sees the hole close, without anyone explaining and without reading |
+| 4 | ✅ A new wave every 15 s with an icon banner (⚡🕵️🕵️); last 10 s RUSH (red pulse, big ⏱) | My | 3 | Banners show at 0:45, 0:30, 0:15 and spies are clearly faster each time |
+| 5 | ✅ Local top 10 by name; end screen in icons (🌿 × 100, 🕵️ × 10, 🧑‍🍳 −50) with the rank as 🏆 #2 | Trang | 6 | Two different names both appear in the top 10 after a reload, in score order |
 
 ## Stretch: only after MVP (cut from the bottom)
 1. Web Audio sounds: catch pop, steal alarm, oops buzz, RUSH tick.
@@ -46,3 +46,7 @@ Win: at least 1 herb left at 0:00. Lose: all 11 herbs stolen before 0:00. Score:
 | 0:41 | Added a picture story on the title screen, a guided first wave, flying-herb steal feedback and wave banners; sounds moved to stretch 1, combo to stretch 2 | A stranger couldn't tell what the game was about; learning by playing beats a rules screen; MVP kept at 39 min |
 | 0:43 | All hints and banners use icons instead of sentences (the only fixed text is the required fan-made notice) | Players read little; pictures work for everyone, on a phone, at a glance |
 | 0:45 | Cooks now have a job: each spy that gets in leaves a hole, a 🔧 cook walks over and patches it (+5); tapping him costs −50 and leaves the hole open. MVP 3 to 11 min, MVP 4 to 3 min | Gives the "don't tap" rule a visible reason; patching rewards patience, but less than catching spies |
+| 0:50 | Built MVP 1–3 in one pass and published the first playable | The plan ran long; one pass was the fastest way to a link that runs |
+| 0:50 | Catching a spy that is running out with a herb sends the herb back to the card | Clear cause and effect in pictures; a few lines of code |
+| 0:51 | Playtest: an idle run lost all 11 herbs in about 25 s, so wave 1 is gentler (a spy every 2 s, 0.8× speed) | Too hard for first-timers |
+| 0:53 | MVP 4 and 5 done. The vault shows 📜 instead of a "SECRET RECIPE" text label | Pictures over words |
