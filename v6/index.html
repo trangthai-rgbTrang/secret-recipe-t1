@@ -107,6 +107,8 @@
   .earned { font-weight: 900; font-size: 15px; }
   .earned:empty, #rivalCall:empty { display: none; }
   .rivalCall { font-weight: 900; color: #ff9db0; font-size: clamp(14px, 1.5vw, 18px); }
+  .mute { position: absolute; right: 12px; bottom: 12px; width: 44px; height: 44px; border-radius: 12px; border: 3px solid #23182b; background: #fff8ec;
+    font-size: 20px; cursor: pointer; box-shadow: 0 4px 0 #23182b; z-index: 5; }
   .btn.alt { background: linear-gradient(#e0f2fe, #7dd3fc); }
   .modeNote { font-size: 13px; color: #cfc6e4; }
   .micro { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(8,10,20,.55); border-radius: 14px; }
@@ -266,6 +268,7 @@
   </g>
   <g id="kbd" pointer-events="none"></g>
   <g id="codes" pointer-events="none"></g>
+  <g id="spotL"></g>
   <text id="banner" x="600" y="210" text-anchor="middle" font-size="64" font-weight="900" fill="#ffcf4a" stroke="#23182b" stroke-width="4" paint-order="stroke"></text>
 </svg>
 
@@ -308,6 +311,7 @@
   <div class="btns"><button class="ico" id="boardHome" aria-label="Home">🏠</button><button class="btn" id="boardPlay">▶ PLAY</button></div>
   <div class="tiny">Fan-made for an internal game jam. Not an official game.</div>
 </div></div>
+  <button class="mute" id="mute" aria-label="Music on/off">🔊</button>
   <div class="micro" id="micro"><div class="mcard"><div class="mtitle" id="mTitle"></div><div class="mbody" id="mBody"></div><div class="mbar"><div id="mBar"></div></div></div></div>
 </div>
 
@@ -439,6 +443,58 @@ const SFX = {
   miss: () => beep(200, .08, 'square', .06),
   boss: () => { beep(110, .5, 'sawtooth', .14, 60); setTimeout(() => beep(90, .6, 'sawtooth', .12, -30), 250); },
 };
+
+// background music, synthesised: a sneaky heist bassline whose tempo climbs with the clock,
+// drums and hats join in, an arpeggio from 0:30 left, a siren hint near the end, a heavier riff for the boss
+const MUSIC = { on: store.get('vg_music', true), next: 0, step: 0, timer: null, out: null, noise: null };
+const BASS = [0, 0, 3, 0, 5, 0, 7, 5, 0, 0, 3, 0, 10, 8, 7, 5];
+const BOSS_BASS = [0, 0, 1, 0, 0, 0, 6, 5, 0, 0, 1, 0, 8, 7, 6, 1];
+const noteHz = semis => 110 * Math.pow(2, semis / 12);
+function musicStart() {
+  if (!AC || MUSIC.timer) return;
+  if (!MUSIC.out) {
+    MUSIC.out = AC.createGain(); MUSIC.out.connect(AC.destination);
+    const len = AC.sampleRate * .5, buf = AC.createBuffer(1, len, AC.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    MUSIC.noise = buf;
+  }
+  MUSIC.out.gain.value = MUSIC.on ? .45 : 0;
+  MUSIC.next = AC.currentTime + .05; MUSIC.step = 0;
+  MUSIC.timer = setInterval(musicTick, 25);
+}
+function musicStop() { clearInterval(MUSIC.timer); MUSIC.timer = null; }
+function musicToggle() {
+  MUSIC.on = !MUSIC.on; store.set('vg_music', MUSIC.on);
+  if (MUSIC.out) MUSIC.out.gain.value = MUSIC.on ? .45 : 0;
+  $('#mute').textContent = MUSIC.on ? '🔊' : '🔇';
+}
+function musicTick() {
+  if (!G || G.over) return musicStop();
+  const boss = !!(G.boss && !G.boss.dead), bpm = boss ? 172 : 108 + 50 * Math.min(1, G.t / SHIFT), sixteenth = 60 / bpm / 4;
+  while (MUSIC.next < AC.currentTime + .12) { playStep(MUSIC.step, MUSIC.next, boss); MUSIC.next += sixteenth; MUSIC.step++; }
+}
+function tone(type, freq, t, dur, vol, slideTo) {
+  const o = AC.createOscillator(), g = AC.createGain();
+  o.type = type; o.frequency.setValueAtTime(freq, t);
+  if (slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, t + dur);
+  g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(.001, t + dur);
+  o.connect(g).connect(MUSIC.out); o.start(t); o.stop(t + dur + .02);
+}
+function noiseHit(t, dur, vol, freq) {
+  const src = AC.createBufferSource(), f = AC.createBiquadFilter(), g = AC.createGain();
+  src.buffer = MUSIC.noise; f.type = 'highpass'; f.frequency.value = freq;
+  g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(.001, t + dur);
+  src.connect(f).connect(g).connect(MUSIC.out); src.start(t); src.stop(t + dur + .02);
+}
+function playStep(n, t, boss) {
+  const s = n % 16, late = G.t / SHIFT > .5;
+  if (s % 2 === 0) tone(boss ? 'sawtooth' : 'triangle', noteHz((boss ? BOSS_BASS : BASS)[s]), t, .18, boss ? .2 : .3);
+  if (s % 4 === 0) tone('sine', 150, t, .16, .55, 40);
+  if ((G.t > 15 || boss) && (s === 4 || s === 12)) noiseHit(t, .12, .25, 1500);
+  if (s % 2 === 1 || late || boss) noiseHit(t, .03, .07, 7000);
+  if ((G.t > 30 || boss) && s % 2 === 0) tone('square', noteHz([12, 15, 19, 22][(n / 2 | 0) % 4] + (boss ? 1 : 0)), t, .08, .045);
+  if (!boss && G.t >= RUSH_AT - 10 && s === 0) tone('sawtooth', 880, t, .5, .035, 660);
+}
 
 function renderJars() {
   const g = $('#jars'); g.innerHTML = '';
@@ -747,9 +803,48 @@ function bossKey(k) {
   b.typed++;
   bossPunch(b);
 }
+// 👆 tap mode: a glowing weak spot pops up somewhere on the baron with a ring closing in on it;
+// tap the spot as the ring closes. Tapping his body, too early or too late, is blocked and he hits back.
+const SPOT_OFFSETS = [[0, -200], [-62, -92], [62, -92], [0, -62], [-38, -262], [44, -150], [-48, -150]];
+const SPOT_TIME = [.9, .75, .6];
 function bossTap(b) {
   if (b.dead || b.state !== 'fight' || G.over) return;
-  bossPunch(b);
+  blocked(b);
+}
+function blocked(b) {
+  say(b, ['Blocked!', 'Nope!', 'Too slow!'][Math.random() * 3 | 0]); SFX.miss();
+  clearSpot(); G.spotNext = G.t + .35;
+  bossAttack(b);
+}
+function clearSpot() { G.spot?.g.remove(); G.spot = null; }
+function spawnSpot(b) {
+  const [dx, dy] = SPOT_OFFSETS[Math.random() * SPOT_OFFSETS.length | 0], x = b.x + dx, y = b.y + dy;
+  const g = el('g', { transform: `translate(${x} ${y})`, style: 'cursor: crosshair' }, $('#spotL'));
+  const ring = el('circle', { r: 72, fill: 'none', stroke: '#fff', 'stroke-width': 5 }, g);
+  el('circle', { r: 30, fill: 'transparent' }, g);
+  el('circle', { r: 19, fill: '#ffcf4a', stroke: '#23182b', 'stroke-width': 4 }, g);
+  el('circle', { r: 7, fill: '#ff4d6d' }, g);
+  const sp = G.spot = { g, ring, t: 0, dur: SPOT_TIME[Math.min(b.round, SPOT_TIME.length - 1)] };
+  g.addEventListener('pointerdown', ev => {
+    ev.preventDefault(); ev.stopPropagation();
+    if (G.spot !== sp || b.dead || G.over) return;
+    const k = sp.t / sp.dur;
+    if (k < .7) return blocked(b);
+    const perfect = k >= .84 && k <= .97;
+    floatText(x, y - 40, perfect ? 'PERFECT!' : 'GOOD', perfect ? '#7dffa8' : '#ffffff');
+    clearSpot(); G.spotNext = G.t + .25;
+    bossPunch(b);
+    if (perfect && !b.dead) bossPunch(b);
+  });
+}
+function tickSpot(b, dt) {
+  if (G.spot) {
+    G.spot.t += dt;
+    const k = G.spot.t / G.spot.dur;
+    G.spot.ring.setAttribute('r', Math.max(19, 72 - 53 * k));
+    G.spot.ring.setAttribute('stroke', k >= .84 ? '#7dffa8' : '#ffffff');
+    if (k >= 1) { clearSpot(); G.spotNext = G.t + .3; }
+  } else if (G.t >= (G.spotNext || 0)) spawnSpot(b);
 }
 // every punch takes one bar off his health; each 4 punches is a round, 3 rounds is a K.O.
 function bossPunch(b) {
@@ -767,6 +862,7 @@ function bossPunch(b) {
   if (G.mode === 'keys') renderBubble(b);
 }
 function bossKO(b) {
+  clearSpot();
   b.dead = true; b.g.remove(); b.bub?.remove();
   G.pts += 300; G.bossDown = true;
   poof(b.x - 60, b.y, '#3b2f52'); poof(b.x + 60, b.y - 80, '#ffcf4a'); poof(b.x, b.y - 180, '#c0313d');
@@ -875,8 +971,9 @@ function update(dt) {
     if (o.dead) continue;
     if (o.kind === 'thief') {
       if (o.boss) {
-        if (o.state === 'drop' && follow(o, dt)) { o.state = 'fight'; o.attackAt = G.t + BOSS_ATTACK_EVERY; if (G.mode === 'keys') renderBubble(o); bossHud(); say(o, G.mode === 'keys' ? 'Arrow keys... if you dare!' : 'Tap me... if you dare!'); game.classList.remove('shake'); void game.offsetWidth; game.classList.add('shake'); }
+        if (o.state === 'drop' && follow(o, dt)) { o.state = 'fight'; o.attackAt = G.t + BOSS_ATTACK_EVERY; if (G.mode === 'keys') renderBubble(o); bossHud(); say(o, G.mode === 'keys' ? 'Arrow keys... if you dare!' : 'Hit my weak spot... if you can!'); game.classList.remove('shake'); void game.offsetWidth; game.classList.add('shake'); }
         else if (o.state === 'fight' && G.t >= o.attackAt) bossAttack(o);
+        if (o.state === 'fight' && G.mode === 'tap') tickSpot(o, dt);
         if (G.over) return;
         place(o); continue;
       }
@@ -946,12 +1043,12 @@ function show(id) {
     $('#boardList').innerHTML = renderRows(TOP, me, 10);
     $('#allList').innerHTML = renderRows(ALL, me, 5);
   }
-  if (id === 'title') { codesL.innerHTML = ''; $('#kbd').innerHTML = ''; $('#bossHud').setAttribute('opacity', 0); ents.innerHTML = ''; $('#ropes').innerHTML = ''; $('#cracks').innerHTML = ''; fxL.innerHTML = ''; FX.length = 0; G = null; scene.classList.remove('rush'); $('#secs').textContent = ''; renderJars(); renderHud(); }
+  if (id === 'title') { $('#spotL').innerHTML = ''; codesL.innerHTML = ''; $('#kbd').innerHTML = ''; $('#bossHud').setAttribute('opacity', 0); ents.innerHTML = ''; $('#ropes').innerHTML = ''; $('#cracks').innerHTML = ''; fxL.innerHTML = ''; FX.length = 0; G = null; scene.classList.remove('rush'); $('#secs').textContent = ''; renderJars(); renderHud(); }
 }
 
 function startGame(mode) {
   if (mode && mode !== MODE) { MODE = mode; TOP = store.get(dayKey(), []); ALL = store.get(allKey(), []); refreshTop(); }
-  $('#micro').classList.remove('on'); $('#blackout').setAttribute('opacity', 0); codesL.innerHTML = ''; $('#kbd').innerHTML = ''; $('#bossHud').setAttribute('opacity', 0);
+  $('#micro').classList.remove('on'); $('#blackout').setAttribute('opacity', 0); codesL.innerHTML = ''; $('#kbd').innerHTML = ''; $('#bossHud').setAttribute('opacity', 0); $('#spotL').innerHTML = '';
   if (!AC) { try { AC = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} }
   const name = $('#name').value.trim();
   store.set('vg_name', name);
@@ -959,17 +1056,19 @@ function startGame(mode) {
   clearDemo(); ents.innerHTML = ''; $('#ropes').innerHTML = ''; $('#cracks').innerHTML = ''; fxL.innerHTML = ''; FX.length = 0;
   G = { t: 0, jarOn: Array(JARS).fill(true), pts: 0, caught: 0, patched: 0, oops: 0, combo: 0, lastCatch: -9, catchPts: 0, comboPts: 0, triples: 0,
     ents: [], cracks: [], over: false, wave: null, next: 0, lastSec: 61, name: name || 'Guest', mode: MODE,
-    lock: null, micro: null, microDone: 0, microWins: 0, boss: null, bossDown: false, warned: new Set() };
+    lock: null, micro: null, microDone: 0, microWins: 0, boss: null, bossDown: false, warned: new Set(), spot: null, spotNext: 0 };
   G.microOrder = ['mash', 'arrows', 'fake'].sort(() => microRng() - .5);
   scene.classList.remove('rush');
   renderJars(); renderHud();
   show(null);
+  musicStart();
 }
 function endGame(win) {
   if (G.over) return;
   G.over = true;
+  musicStop();
   scene.classList.remove('rush');
-  $('#micro').classList.remove('on'); $('#blackout').setAttribute('opacity', 0); codesL.innerHTML = ''; $('#kbd').innerHTML = ''; $('#bossHud').setAttribute('opacity', 0);
+  $('#micro').classList.remove('on'); $('#blackout').setAttribute('opacity', 0); codesL.innerHTML = ''; $('#kbd').innerHTML = ''; $('#bossHud').setAttribute('opacity', 0); $('#spotL').innerHTML = '';
   const left = G.jarOn.filter(Boolean).length, jarPts = left * 100, perfect = win && left === JARS ? PERFECT : 0, total = Math.max(0, jarPts + G.pts + perfect);
   const badges = (perfect ? '✨' : '') + (G.triples >= 3 ? '🔥' : '') + (G.oops === 0 && G.caught >= 10 ? '😇' : '') + (G.bossDown ? '👑' : '');
   const merge = list => {
@@ -1017,6 +1116,8 @@ $('#challenge').addEventListener('click', () => {
 renderJars(); renderHud();
 refreshTop();
 setInterval(refreshTop, 5000);
+$('#mute').textContent = MUSIC.on ? '🔊' : '🔇';
+$('#mute').addEventListener('click', ev => { ev.stopPropagation(); musicToggle(); });
 $('#start').addEventListener('click', () => startGame('keys'));
 $('#startTap').addEventListener('click', () => startGame('tap'));
 $('#again').addEventListener('click', () => startGame(G ? G.mode : MODE));
@@ -1032,8 +1133,9 @@ window.addEventListener('keydown', e => {
   const inMenu = ['title', 'end', 'board'].some(s => $('#' + s).classList.contains('on'));
   if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key) || (e.key === ' ' && !typing)) e.preventDefault();
   if (inMenu && ((e.key === ' ' && !typing) || e.key === 'Enter')) { e.preventDefault(); startGame(MODE); return; }
-  if (!inMenu && G && !G.over && G.mode === 'keys' && !e.repeat) onKey(e.key.length === 1 ? e.key.toUpperCase() : e.key);
+  if (!inMenu && G && !G.over && G.mode === 'keys' && !e.repeat && e.key.toUpperCase() !== 'M') onKey(e.key.length === 1 ? e.key.toUpperCase() : e.key);
   if (inMenu && e.key === 'Escape') show('title');
+  if (!typing && (e.key === 'm' || e.key === 'M')) { musicToggle(); return; }
 });
 
 let last = 0;
