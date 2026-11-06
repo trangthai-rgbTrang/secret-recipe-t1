@@ -55,6 +55,10 @@
   .why { font-size: 14px; font-weight: 700; color: #5a4a3a; max-width: 340px; line-height: 1.45; }
   .why:empty { display: none; }
   .flash { animation: flash .7s ease-out; }
+  .limp .bob { animation: limp .45s ease-in-out infinite alternate !important; transform-box: fill-box; transform-origin: 50% 100%; }
+  @keyframes limp { from { transform: rotate(-7deg) translateY(0); } to { transform: rotate(5deg) translateY(-6px); } }
+  .dizzy { transform-box: fill-box; transform-origin: 50% 50%; animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
   .hurt { animation: hurt .25s ease-out; transform-box: fill-box; transform-origin: 50% 100%; }
   @keyframes hurt { 25% { transform: translateX(-10px) rotate(-6deg); } 70% { transform: translateX(8px) rotate(4deg); } }
   #codes .danger { animation: danger .35s ease-in-out infinite alternate; }
@@ -475,7 +479,7 @@ function musicToggle() {
 }
 function musicTick() {
   if (!G || G.over) return musicStop();
-  const boss = !!(G.boss && !G.boss.dead), bpm = boss ? 172 : 108 + 50 * Math.min(1, G.t / SHIFT), sixteenth = 60 / bpm / 4;
+  const boss = !!(G.boss && G.boss.state === 'fight'), bpm = boss ? 172 : 108 + 50 * Math.min(1, G.t / SHIFT), sixteenth = 60 / bpm / 4;
   while (MUSIC.next < AC.currentTime + .12) { playStep(MUSIC.step, MUSIC.next, boss); MUSIC.next += sixteenth; MUSIC.step++; }
 }
 function tone(type, freq, t, dur, vol, slideTo) {
@@ -622,7 +626,7 @@ function renderKbd() {
   const g = $('#kbd'); g.innerHTML = '';
   if (!G || G.over || G.mode !== 'keys') return;
   // during the boss fight the strip shows the four arrows instead of the letters
-  const fight = G.boss && !G.boss.dead;
+  const fight = G.boss && G.boss.state === 'fight';
   const pool = fight ? ['ArrowLeft', 'ArrowUp', 'ArrowRight', 'ArrowDown'] : keyPool(), used = fight ? new Set(pool) : usedKeys();
   const w = 52, gap = 8, x0 = 600 - (pool.length * (w + gap) - gap) / 2;
   pool.forEach((ch, i) => {
@@ -927,13 +931,32 @@ function bossPunch(b) {
 }
 function bossKO(b) {
   clearSpot();
-  b.dead = true; b.g.remove(); b.bub?.remove();
-  G.pts += 300; G.bossDown = true;
-  poof(b.x - 60, b.y, '#3b2f52'); poof(b.x + 60, b.y - 80, '#ffcf4a'); poof(b.x, b.y - 180, '#c0313d');
+  b.state = 'ko'; b.bub?.remove(); b.bub = null; G.lock = null;
+  G.pts += 300; G.bossDown = true; G.victory = true;
+  poof(b.x - 70, b.y - 60, '#ffcf4a');
   floatText(b.x, b.y - 300, '+300', '#ffcf4a');
-  banner('K.O.!'); SFX.patch(); bossHud();
+  banner('K.O.!'); bossHud();
+  [523, 659, 784, 1047].forEach((f, i) => setTimeout(() => beep(f, .18, 'triangle', .16), i * 110));
   (b.jars || []).forEach(i => flyJar({ x: b.x, y: b.y - 250 }, { x: JAR_SPOTS[i][0], y: JAR_SPOTS[i][1] }, JAR_COLORS[i], () => { G.jarOn[i] = true; renderJars(); renderHud(); }));
+  // bandage across the beanie and stars spinning round his head
+  b.body.querySelector('.bob').insertAdjacentHTML('beforeend',
+    '<rect x="-36" y="-124" width="72" height="13" rx="6" fill="#fff" stroke="#23182b" stroke-width="3" transform="rotate(-16 0 -118)"/>' +
+    '<rect x="8" y="-90" width="22" height="9" rx="4" fill="#fff" stroke="#23182b" stroke-width="2" transform="rotate(30 19 -86)"/>' +
+    '<g class="dizzy"><path d="M-40 -168 l5 -11 l5 11 l-10 -7 h10 z M30 -176 l5 -11 l5 11 l-10 -7 h10 z M-6 -196 l5 -11 l5 11 l-10 -7 h10 z" fill="#ffcf4a" stroke="#23182b" stroke-width="2"/></g>');
+  b.body.setAttribute('class', 'walk limp');
+  b.path = [{ x: b.x, y: b.y }, { x: 1042, y: 640 }]; b.i = 1; b.sp = 135;
+  say(b, "Ow ow ow... I'll be back!");
+  for (const e of G.ents) if (!e.dead && e.kind === 'guard') say(e, 'Hooray!');
+  confetti();
   renderHud();
+}
+function confetti() {
+  const colors = ['#ffcf4a', '#ff6b6b', '#7dd3fc', '#7dffa8', '#da77f2'];
+  for (let i = 0; i < 40; i++) {
+    const x = Math.random() * 1200, drift = Math.random() * 120 - 60, spin = Math.random() * 720 - 360, delay = Math.random() * .4;
+    const c = el('rect', { width: 10, height: 16, rx: 2, fill: colors[i % colors.length] }, fxL);
+    FX.push({ el: c, t: -delay, dur: 2.2, step: (f, k) => { k = Math.max(0, k); c.setAttribute('transform', `translate(${x + drift * k} ${-20 + 760 * k}) rotate(${spin * k})`); } });
+  }
 }
 // the baron swipes a jar: on a wrong arrow, or when the player leaves him alone too long
 function bossAttack(b) {
@@ -1020,7 +1043,7 @@ function update(dt) {
   for (const [at, text] of [[45, '👑 BOSS IN 5…'], [47, '3…'], [48, '2…'], [49, '1…']])
     if (G.t >= at && !G.warned.has(at)) { G.warned.add(at); banner(text); SFX.tick(); }
   if (!G.boss && G.t >= RUSH_AT) spawnBoss();
-  if (!G.guide && G.t >= .3) { G.guide = true; spawnThief({ way: 'doorL', sp: 60, hint: true }); }
+  if (!G.guide && !G.boss && G.t >= .3) { G.guide = true; spawnThief({ way: 'doorL', sp: 60, hint: true }); }
   if (!G.guideGuard && G.t >= 1.6) { G.guideGuard = true; crack(); spawnGuard(G.cracks[G.cracks.length - 1], true); }
   if (G.t >= 3.5 && G.t >= G.next) {
     // never two characters on the same key: wait for a free key before letting the next thief in
@@ -1038,6 +1061,7 @@ function update(dt) {
       if (o.boss) {
         if (o.state === 'drop' && follow(o, dt)) { o.state = 'fight'; o.attackAt = G.t + BOSS_ATTACK_EVERY; if (G.mode === 'keys') renderBubble(o); bossHud(); say(o, G.mode === 'keys' ? 'Arrow keys... if you dare!' : 'Hit my weak spot... if you can!'); game.classList.remove('shake'); void game.offsetWidth; game.classList.add('shake'); }
         else if (o.state === 'fight' && G.t >= o.attackAt) bossAttack(o);
+        else if (o.state === 'ko' && follow(o, dt)) { o.dead = true; o.g.remove(); poof(o.x, o.y, '#c0313d'); endGame(true); return; }
         if (o.state === 'fight' && G.mode === 'tap') tapBossTick(o, dt);
         if (G.over) return;
         place(o); continue;
@@ -1123,7 +1147,7 @@ function startGame(mode) {
   G = { t: 0, jarOn: Array(JARS).fill(true), pts: 0, caught: 0, patched: 0, oops: 0, combo: 0, lastCatch: -9, catchPts: 0, comboPts: 0, triples: 0,
     ents: [], cracks: [], over: false, wave: null, next: 0, lastSec: 61, name: name || 'Guest', mode: MODE,
     lock: null, micro: null, microDone: 0, microWins: 0, boss: null, bossDown: false, warned: new Set(), spot: null, spotNext: 0, tapRound: -1,
-    lost: { thief: 0, boss: 0, micro: 0 }, lowWarned: 0 };
+    lost: { thief: 0, boss: 0, micro: 0 }, lowWarned: 0, victory: false };
   G.microOrder = ['mash', 'arrows', 'fake'].sort(() => microRng() - .5);
   scene.classList.remove('rush');
   renderJars(); renderHud();
@@ -1142,7 +1166,7 @@ function endGame(win) {
 // a 2-second scene so the player sees why the run ended: lost = alarm, the glass shatters, the recipe flies out
 function outro(win, done) {
   if (win) {
-    banner('⏰ SHIFT OVER!');
+    banner(G.victory ? '🏆 VICTORY!' : '⏰ SHIFT OVER!');
     beep(660, .15, 'triangle', .18); setTimeout(() => beep(880, .15, 'triangle', .18), 150); setTimeout(() => beep(1320, .3, 'triangle', .18), 300);
     for (const e of G.ents) if (!e.dead && e.kind === 'thief') { e.dead = true; e.g.remove(); e.rope?.remove(); poof(e.x, e.y, e.dis ? '#ffffff' : '#3b2f52'); }
     floatText(600, 300, 'The recipe is safe!', '#7dffa8');
@@ -1160,7 +1184,8 @@ function outro(win, done) {
 }
 function finishGame(win) {
   scene.classList.remove('alarm');
-  const left = G.jarOn.filter(Boolean).length, jarPts = left * 100, perfect = win && left === JARS ? PERFECT : 0, total = Math.max(0, jarPts + G.pts + perfect);
+  const timeBonus = win && G.victory ? Math.max(0, Math.ceil(SHIFT - G.t)) * 10 : 0;
+  const left = G.jarOn.filter(Boolean).length, jarPts = left * 100, perfect = win && left === JARS ? PERFECT : 0, total = Math.max(0, jarPts + G.pts + perfect + timeBonus);
   const badges = (perfect ? '✨' : '') + (G.triples >= 3 ? '🔥' : '') + (G.oops === 0 && G.caught >= 10 ? '😇' : '') + (G.bossDown ? '👑' : '');
   const merge = list => {
     const out = list.map(e => ({ ...e })), mine = out.find(e => sameName(e.n, G.name));
@@ -1178,7 +1203,7 @@ function finishGame(win) {
   $('#toast').textContent = '';
   const lostBy = [G.lost.thief && `🦹 ${G.lost.thief} by thieves`, G.lost.boss && `👑 ${G.lost.boss} by the Baron`, G.lost.micro && `⚡ ${G.lost.micro} in mini-games`].filter(Boolean).join(' · ');
   $('#why').textContent = win
-    ? `You held the vault for the whole shift.` + (lostBy ? ` Jars lost: ${lostBy}.` : ' Not a single jar lost!')
+    ? (G.victory ? 'You beat the Spice Baron and saved the recipe!' : `You held the vault for the whole shift.`) + (lostBy ? ` Jars lost: ${lostBy}.` : ' Not a single jar lost!')
     : `All 11 jars were taken, so the recipe was stolen. Jars lost: ${lostBy || 'none'}.`;
   const rank = 1 + top.filter(e => e.s > total && !sameName(e.n, G.name)).length;
   $('#endKick').textContent = win ? 'SHIFT COMPLETE' : 'THE SHELVES ARE EMPTY';
@@ -1192,6 +1217,7 @@ function finishGame(win) {
     <div class="r bad"><span>👮 🚫 ${G.oops} × 50</span><b>−${G.oops * 50}</b></div>
     ${G.mode === 'keys' ? `<div class="r good"><span>⚡ mini-games ${G.microWins}/3</span><b>+${G.microWins * 30}</b></div>` : ''}
     ${G.bossDown ? '<div class="r good"><span>👑 Spice Baron K.O.</span><b>+300</b></div>' : ''}
+    ${timeBonus ? `<div class="r good"><span>⏱ ${timeBonus / 10}s left × 10</span><b>+${timeBonus}</b></div>` : ''}
     ${perfect ? `<div class="r good"><span>✨ 11/11 PERFECT</span><b>+${perfect}</b></div>` : ''}
     <div class="tot"><span>★</span><b>${total}</b></div>`;
   $('#lb').innerHTML = renderRows(top, G.name, 3);
