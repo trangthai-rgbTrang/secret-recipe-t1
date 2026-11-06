@@ -50,6 +50,10 @@
   .glow { transform-box: fill-box; transform-origin: 50% 50%; animation: glow 1.6s ease-in-out infinite alternate; }
   @keyframes glow { from { opacity: .55; transform: scale(.94); } to { opacity: 1; transform: scale(1.06); } }
   .gone { animation: gone 1.2s ease-in-out infinite; }
+  #jars.low { animation: gone .5s ease-in-out infinite; }
+  .alarm #rushGlow { animation: throb .2s ease-in-out infinite alternate; }
+  .why { font-size: 14px; font-weight: 700; color: #5a4a3a; max-width: 340px; line-height: 1.45; }
+  .why:empty { display: none; }
   .flash { animation: flash .7s ease-out; }
   .hurt { animation: hurt .25s ease-out; transform-box: fill-box; transform-origin: 50% 100%; }
   @keyframes hurt { 25% { transform: translateX(-10px) rotate(-6deg); } 70% { transform: translateX(8px) rotate(4deg); } }
@@ -241,7 +245,7 @@
   </g>
   <g stroke="#b8acd0" stroke-width="3"><path d="M568 418V530M586 418V530M604 418V530M622 418V530M640 418V530"/></g>
   <ellipse class="glow" cx="600" cy="330" rx="74" ry="70" fill="url(#scrollGlow)"/>
-  <g>
+  <g id="scroll">
     <rect class="o" x="566" y="316" width="68" height="34" rx="6" fill="#fbf0d4"/>
     <rect class="o" x="558" y="312" width="12" height="42" rx="6" fill="#e9cf96"/><rect class="o" x="630" y="312" width="12" height="42" rx="6" fill="#e9cf96"/>
     <path d="M580 326H620M580 336H612" stroke="#a47b3b" stroke-width="3" stroke-linecap="round"/>
@@ -294,6 +298,7 @@
   <div class="title" id="endTitle">Recipe safe!</div>
   <span class="rank" id="rank"></span>
   <div class="earned" id="title2"></div>
+  <div class="why" id="why"></div>
   <div class="earned" id="rival"></div>
   <div class="score" id="score"></div>
   <div class="lb" id="lb"></div>
@@ -498,6 +503,12 @@ function playStep(n, t, boss) {
 
 function renderJars() {
   const g = $('#jars'); g.innerHTML = '';
+  const left = G ? G.jarOn.filter(Boolean).length : JARS;
+  g.classList.toggle('low', !!G && !G.over && left <= 3);
+  if (G && !G.over) {
+    if (left === 3 && G.lowWarned < 3) { G.lowWarned = 3; banner('⚠ 3 JARS LEFT!'); SFX.oops(); }
+    if (left === 1 && G.lowWarned < 1 + 3) { G.lowWarned = 4; banner('⚠ LAST JAR!'); SFX.oops(); }
+  }
   JAR_SPOTS.forEach(([x, y], i) => {
     if (G && !G.jarOn[i]) { el('rect', { class: 'gone', x: x - 15, y: y - 35, width: 30, height: 35, rx: 7, fill: 'none', stroke: '#ffd34d', 'stroke-width': 3, 'stroke-dasharray': '6 5' }, g); return; }
     const j = el('g', { transform: `translate(${x} ${y})` }, g); j.style.color = JAR_COLORS[i]; cloneInto(j, 'jar');
@@ -684,7 +695,7 @@ function takeJar(o) {
 function steal(o) {
   const i = takeJar(o);
   if (i < 0) return;
-  o.jar = i;
+  o.jar = i; G.lost.thief++;
   say(o, ['Too slow!', 'Yoink!', 'Bye bye recipe!', 'lol'][Math.random() * 4 | 0]);
   o.danger = false; if (o.bub) renderBubble(o);
   o.hint?.remove();
@@ -876,6 +887,7 @@ function bossAttack(b) {
   b.attackAt = G.t + BOSS_ATTACK_EVERY;
   const i = takeJar(b);
   if (i < 0) return;
+  G.lost.boss++;
   (b.jars = b.jars || []).push(i);
   say(b, 'MINE!');
   if (G.jarOn.every(on => !on)) endGame(false);
@@ -924,7 +936,7 @@ function endMicro(ok) {
   else {
     banner('💥 FAIL!'); SFX.oops();
     const left = G.jarOn.map((on, i) => on ? i : -1).filter(i => i >= 0);
-    if (left.length) { const i = left[left.length - 1]; G.jarOn[i] = false; flyJar({ x: JAR_SPOTS[i][0], y: JAR_SPOTS[i][1] }, { x: 158, y: 520 }, JAR_COLORS[i]); crack(); renderJars(); }
+    if (left.length) { const i = left[left.length - 1]; G.jarOn[i] = false; G.lost.micro++; flyJar({ x: JAR_SPOTS[i][0], y: JAR_SPOTS[i][1] }, { x: 158, y: 520 }, JAR_COLORS[i]); crack(); renderJars(); }
     if (G.jarOn.every(on => !on)) return endGame(false);
   }
   renderHud();
@@ -1043,7 +1055,7 @@ function show(id) {
     $('#boardList').innerHTML = renderRows(TOP, me, 10);
     $('#allList').innerHTML = renderRows(ALL, me, 5);
   }
-  if (id === 'title') { $('#spotL').innerHTML = ''; codesL.innerHTML = ''; $('#kbd').innerHTML = ''; $('#bossHud').setAttribute('opacity', 0); ents.innerHTML = ''; $('#ropes').innerHTML = ''; $('#cracks').innerHTML = ''; fxL.innerHTML = ''; FX.length = 0; G = null; scene.classList.remove('rush'); $('#secs').textContent = ''; renderJars(); renderHud(); }
+  if (id === 'title') { scene.classList.remove('alarm'); $('#scroll').style.opacity = ''; $('#spotL').innerHTML = ''; codesL.innerHTML = ''; $('#kbd').innerHTML = ''; $('#bossHud').setAttribute('opacity', 0); ents.innerHTML = ''; $('#ropes').innerHTML = ''; $('#cracks').innerHTML = ''; fxL.innerHTML = ''; FX.length = 0; G = null; scene.classList.remove('rush'); $('#secs').textContent = ''; renderJars(); renderHud(); }
 }
 
 function startGame(mode) {
@@ -1052,11 +1064,13 @@ function startGame(mode) {
   if (!AC) { try { AC = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} }
   const name = $('#name').value.trim();
   store.set('vg_name', name);
+  scene.classList.remove('alarm'); $('#scroll').style.opacity = '';
   rand = seeded('vault-guard ' + DAY); codeRng = seeded('codes ' + DAY); microRng = seeded('micro ' + DAY);
   clearDemo(); ents.innerHTML = ''; $('#ropes').innerHTML = ''; $('#cracks').innerHTML = ''; fxL.innerHTML = ''; FX.length = 0;
   G = { t: 0, jarOn: Array(JARS).fill(true), pts: 0, caught: 0, patched: 0, oops: 0, combo: 0, lastCatch: -9, catchPts: 0, comboPts: 0, triples: 0,
     ents: [], cracks: [], over: false, wave: null, next: 0, lastSec: 61, name: name || 'Guest', mode: MODE,
-    lock: null, micro: null, microDone: 0, microWins: 0, boss: null, bossDown: false, warned: new Set(), spot: null, spotNext: 0 };
+    lock: null, micro: null, microDone: 0, microWins: 0, boss: null, bossDown: false, warned: new Set(), spot: null, spotNext: 0,
+    lost: { thief: 0, boss: 0, micro: 0 }, lowWarned: 0 };
   G.microOrder = ['mash', 'arrows', 'fake'].sort(() => microRng() - .5);
   scene.classList.remove('rush');
   renderJars(); renderHud();
@@ -1069,6 +1083,30 @@ function endGame(win) {
   musicStop();
   scene.classList.remove('rush');
   $('#micro').classList.remove('on'); $('#blackout').setAttribute('opacity', 0); codesL.innerHTML = ''; $('#kbd').innerHTML = ''; $('#bossHud').setAttribute('opacity', 0); $('#spotL').innerHTML = '';
+  G.spot = null;
+  outro(win, () => finishGame(win));
+}
+// a 2-second scene so the player sees why the run ended: lost = alarm, the glass shatters, the recipe flies out
+function outro(win, done) {
+  if (win) {
+    banner('⏰ SHIFT OVER!');
+    beep(660, .15, 'triangle', .18); setTimeout(() => beep(880, .15, 'triangle', .18), 150); setTimeout(() => beep(1320, .3, 'triangle', .18), 300);
+    for (const e of G.ents) if (!e.dead && e.kind === 'thief') { e.dead = true; e.g.remove(); e.rope?.remove(); poof(e.x, e.y, e.dis ? '#ffffff' : '#3b2f52'); }
+    floatText(600, 300, 'The recipe is safe!', '#7dffa8');
+    setTimeout(done, 1900);
+    return;
+  }
+  scene.classList.add('alarm');
+  [0, 400, 800, 1200].forEach(ms => setTimeout(() => beep(ms % 800 ? 620 : 880, .35, 'sawtooth', .12, ms % 800 ? 260 : -260), ms));
+  CRACK_SPOTS.forEach(([x, y]) => el('path', { d: `M${x} ${y - 24} l-12 14 l16 10 l-14 18 l14 10`, stroke: '#fff', 'stroke-width': 4, fill: 'none' }, $('#cracks')));
+  const fly = $('#scroll').cloneNode(true); fly.removeAttribute('id'); fxL.appendChild(fly);
+  $('#scroll').style.opacity = 0;
+  FX.push({ el: fly, t: 0, dur: 1.6, step: (f, k) => f.el.setAttribute('transform', `translate(${-440 * k} ${-260 * Math.sin(k * Math.PI) + 260 * k}) rotate(${-540 * k} 600 333)`) });
+  banner('THE RECIPE IS GONE!');
+  setTimeout(done, 2600);
+}
+function finishGame(win) {
+  scene.classList.remove('alarm');
   const left = G.jarOn.filter(Boolean).length, jarPts = left * 100, perfect = win && left === JARS ? PERFECT : 0, total = Math.max(0, jarPts + G.pts + perfect);
   const badges = (perfect ? '✨' : '') + (G.triples >= 3 ? '🔥' : '') + (G.oops === 0 && G.caught >= 10 ? '😇' : '') + (G.bossDown ? '👑' : '');
   const merge = list => {
@@ -1085,6 +1123,10 @@ function endGame(win) {
   $('#title2').textContent = `🎖 ${titleFor(best)}` + (badges ? ` · ${badges}` : '');
   $('#rival').textContent = RIVAL ? (total > RIVAL.s ? `⚔️ You beat ${RIVAL.n} (${RIVAL.s})!` : `⚔️ ${RIVAL.n} still leads by ${RIVAL.s - total}`) : '';
   $('#toast').textContent = '';
+  const lostBy = [G.lost.thief && `🦹 ${G.lost.thief} by thieves`, G.lost.boss && `👑 ${G.lost.boss} by the Baron`, G.lost.micro && `⚡ ${G.lost.micro} in mini-games`].filter(Boolean).join(' · ');
+  $('#why').textContent = win
+    ? `You held the vault for the whole shift.` + (lostBy ? ` Jars lost: ${lostBy}.` : ' Not a single jar lost!')
+    : `All 11 jars were taken, so the recipe was stolen. Jars lost: ${lostBy || 'none'}.`;
   const rank = 1 + top.filter(e => e.s > total && !sameName(e.n, G.name)).length;
   $('#endKick').textContent = win ? 'SHIFT COMPLETE' : 'THE SHELVES ARE EMPTY';
   const t = $('#endTitle'); t.textContent = win ? 'Recipe safe!' : 'Recipe stolen!'; t.className = 'title ' + (win ? 'win' : 'lose');
