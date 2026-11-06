@@ -1,38 +1,38 @@
 # PLAN.md: T1 – Chị Trang + My
 
 ## Pitch (one sentence)
-You are the night cook, trying to keep the 11 secret herbs & spices in the vault, before the 60-second shift change ends your watch.
+You are the night cook, trying to stop sneaky spies from stealing KFC's secret recipe, before the 60-second shift ends.
 
 ## Theme and limitation
-The secret recipe: KFC's 11 herbs & spices recipe card, locked in the kitchen vault. The player protects it; each spy that reaches the vault steals one herb.
-Limitation: 60-Second Run. How it shapes the core mechanic: one run is one 60-second night shift, so holding the vault until 0:00 is the win. Spies speed up every 15 s and the last 10 s is a RUSH.
+The secret recipe: KFC's 11 herbs & spices, kept as a recipe card in the kitchen vault. Each spy that reaches the vault grabs one herb and runs; lose all 11 and the recipe is gone.
+Limitation: 60-Second Run. How it shapes the core mechanic: one run is one 60-second night shift, so holding the vault until 0:00 is the win. A new wave every 15 s brings faster spies, and the last 10 s is a RUSH.
 
 ## Core loop
-What the player does every 5 seconds: spot the spies running from 6 doors toward the vault and tap each one before it gets in.
+What the player does every 5 seconds: tap the spies sneaking from the doors toward the vault; when one gets through, a herb flies off the card and a hole opens, so leave the 🔧 cook alone while he walks over and patches it.
 
 ## Controls
-Tap (phone) or click (laptop) a spy. Space or Enter starts and restarts a run.
+Tap (phone) or click (laptop). Space or Enter starts and restarts. Type your name on the title screen.
 
 ## Win, lose and score
-Win: at least 1 herb left at 0:00. Lose: all 11 herbs stolen before 0:00. Score: herbs left × 100 + spies caught × 10.
+Win: at least 1 herb left at 0:00. Lose: all 11 herbs stolen before 0:00. Score: herbs left × 100 + spies caught × 10 + holes patched × 5 − cooks hit × 50. Each name's best score goes into a top 10 on the device.
 
 ## MVP: must ship (5 items max, in build order; playable after item 3)
 | # | Item | Owner | Minutes | Done when |
 |---|------|-------|---------|-----------|
-| 1 | Title screen ("Tap to start" + fan-made notice), 60 s countdown, end screen with restart | Trang | 8 | Start → 60 → 0 → end screen → restart works |
-| 2 | Vault + recipe card with 11 herbs; spies walk from 6 doors to the vault; each arrival steals 1 herb; 0 herbs = lose | My | 10 | Doing nothing loses herbs one by one and ends in "Recipe stolen!" |
-| 3 | Tap/click a spy to catch it (big hit area), score, win/lose screens | Trang | 7 | A playtester wins one run on a phone and on a laptop |
-| 4 | Difficulty ramp every 15 s; last 10 s RUSH (red pulse) | My | 5 | Spies at 0:50 are clearly faster than at 0:05 |
-| 5 | Web Audio sounds (catch, steal, last-10 s tick), catch burst, best score in localStorage | Trang | 8 | Every catch and steal has a sound; best score survives a reload |
+| 1 | Title screen told in pictures, no sentences: 🕵️ ➜ 🔐📜 ❌ · 👆🕵️ ✅ · 👆🧑‍🍳 ❌ · ⏱ 60; name field with 👤; big ▶ button; fan-made notice; 60 s countdown; end screen with ↻ restart | Trang | 9 | A first-time player can say what the game is about from the pictures alone, without reading |
+| 2 | Vault labelled "SECRET RECIPE" + card with 11 herbs; spies walk from 6 doors; on arrival a herb flies from the card to the spy, who runs back out; 0 herbs = lose | My | 10 | Doing nothing shows herbs flying away one by one and ends in "Recipe stolen!" |
+| 3 | Tap a spy +10. Each spy that gets in leaves a hole 🕳️ in the vault; a cook carrying 🔧 walks from a door to the hole (green dotted line) and patches it (green progress ring), +5. Tapping a cook = −50 and the hole stays open. First 5 s are a guided wave in pictures: a bouncing 👆 over one slow spy, then a 🚫 over the first cook | Trang | 11 | A first-time player catches a spy, leaves the 🔧 cook alone and sees the hole close, without anyone explaining and without reading |
+| 4 | A new wave every 15 s with an icon banner (⚡🕵️🕵️); last 10 s RUSH (red pulse, big ⏱) | My | 3 | Banners show at 0:45, 0:30, 0:15 and spies are clearly faster each time |
+| 5 | Local top 10 by name; end screen in icons (🌿 × 100, 🕵️ × 10, 🧑‍🍳 −50) with the rank as 🏆 #2 | Trang | 6 | Two different names both appear in the top 10 after a reload, in score order |
 
 ## Stretch: only after MVP (cut from the bottom)
-1. Golden drumstick: tap it to freeze all spies for 2 s.
-2. Disguised spy (delivery driver) that needs 2 taps.
-3. "Herb #7 stolen!" floating text.
+1. Web Audio sounds: catch pop, steal alarm, oops buzz, RUSH tick.
+2. Combo ×2 / ×3 for catches within 1 s (a cook tap resets it); Perfect shift +500 when no herb is lost.
+3. Desktop layout (≥ 900 px): how-to-play panel left, live top 10 right; "Copy score" button to challenge others in chat.
 
 ## Risks and fallbacks (top 2)
-- Risk: taps miss on phones (canvas scaling, small targets) / Fallback: spies as DOM elements with large hit areas instead of canvas hit-testing.
-- Risk: GitHub Pages fails or lags before the 0:55 link / Fallback: publish the same folder to Netlify.
+- Risk: newcomers don't get what to tap or why herbs disappear / Fallback: keep the guided first wave and the flying-herb animation even if other items slip; cut wave banners first.
+- Risk: cooks and spies both walk toward the vault and get mixed up / Fallback: cooks always carry a 🔧 badge, have a green ring and a green dotted line to their hole; spies have a red ring and red trail.
 
 ## Milestones
 - 0:55 First playable: MVP items 1 to 3
@@ -42,3 +42,7 @@ Win: at least 1 herb left at 0:00. Lose: all 11 herbs stolen before 0:00. Score:
 | Time | Change | Why |
 |------|--------|-----|
 | 0:10 | Picked Vault Guard over Sauce Memory Rush and Spice Heist 60 | Lowest build risk for 2 people; one tap input works on phone and laptop |
+| 0:39 | Added night-crew cooks to MVP 3 (tap = −50); added a local top 10 by name; combo and Perfect shift added as stretch | Tapping only spies could be spammed; names and ranks make it competitive |
+| 0:41 | Added a picture story on the title screen, a guided first wave, flying-herb steal feedback and wave banners; sounds moved to stretch 1, combo to stretch 2 | A stranger couldn't tell what the game was about; learning by playing beats a rules screen; MVP kept at 39 min |
+| 0:43 | All hints and banners use icons instead of sentences (the only fixed text is the required fan-made notice) | Players read little; pictures work for everyone, on a phone, at a glance |
+| 0:45 | Cooks now have a job: each spy that gets in leaves a hole, a 🔧 cook walks over and patches it (+5); tapping him costs −50 and leaves the hole open. MVP 3 to 11 min, MVP 4 to 3 min | Gives the "don't tap" rule a visible reason; patching rewards patience, but less than catching spies |
