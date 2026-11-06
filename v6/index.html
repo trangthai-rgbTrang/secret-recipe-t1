@@ -554,12 +554,15 @@ function renderBubble(o) {
 function renderKbd() {
   const g = $('#kbd'); g.innerHTML = '';
   if (!G || G.over || G.mode !== 'keys') return;
-  const pool = keyPool(), used = usedKeys(), w = 52, gap = 8, x0 = 600 - (pool.length * (w + gap) - gap) / 2;
+  // during the boss fight the strip shows the four arrows instead of the letters
+  const fight = G.boss && !G.boss.dead;
+  const pool = fight ? ['ArrowLeft', 'ArrowUp', 'ArrowRight', 'ArrowDown'] : keyPool(), used = fight ? new Set(pool) : usedKeys();
+  const w = 52, gap = 8, x0 = 600 - (pool.length * (w + gap) - gap) / 2;
   pool.forEach((ch, i) => {
     const x = x0 + i * (w + gap), on = used.has(ch), hit = G.pressed === ch && G.t - G.pressedAt < .15, y = hit ? 664 : 658;
     el('rect', { x, y: 664, width: w, height: 46, rx: 9, fill: '#0d0a14', opacity: .6 }, g);
-    el('rect', { x, y, width: w, height: 46, rx: 9, fill: hit ? '#ffffff' : on ? KEY_COLORS[ch] : '#3a3348', stroke: '#23182b', 'stroke-width': 3 }, g);
-    el('text', { x: x + w / 2, y: y + 30, 'text-anchor': 'middle', 'font-size': 22, 'font-weight': 900, fill: on || hit ? '#23182b' : '#8f86a3' }, g).textContent = ch;
+    el('rect', { x, y, width: w, height: 46, rx: 9, fill: hit ? '#ffffff' : on ? (KEY_COLORS[ch] || '#fff1b8') : '#3a3348', stroke: '#23182b', 'stroke-width': 3 }, g);
+    el('text', { x: x + w / 2, y: y + 30, 'text-anchor': 'middle', 'font-size': 22, 'font-weight': 900, fill: on || hit ? '#23182b' : '#8f86a3' }, g).textContent = ARROW_GLYPH[ch] || ch;
   });
 }
 function say(o, text) {
@@ -656,10 +659,11 @@ function spawnGuard(c, hint) {
   }
   ch.g.addEventListener('pointerdown', ev => { ev.preventDefault(); ev.stopPropagation(); if (G.mode === 'tap') hitGuard(o); });
   c.guard = o; G.ents.push(o);
-  if (G.mode === 'keys' && pickCode(o)) renderBubble(o); else place(o);
+  if (G.boss) o.safe = true;
+  if (G.mode === 'keys' && !o.safe && pickCode(o)) renderBubble(o); else place(o);
 }
 function hitGuard(o) {
-  if (o.dead || G.over) return;
+  if (o.dead || o.safe || G.over) return;
   o.dead = true; o.g.remove(); o.bub?.remove();
   G.oops++; G.pts -= 50; G.combo = 0;
   floatText(o.x, o.y - 160, '🚫 −50', '#ff6b7f');
@@ -678,8 +682,8 @@ function miss() {
 }
 function onKey(k) {
   if (G.micro) return microKey(k);
-  if (k.startsWith('Arrow')) return bossKey(k);
   G.pressed = k; G.pressedAt = G.t;
+  if (k.startsWith('Arrow')) return bossKey(k);
   if (!/^[A-Z]$/.test(k)) return;
   const lock = G.lock && !G.lock.dead ? G.lock : null;
   if (lock) {
@@ -708,8 +712,26 @@ function spawnBoss() {
     sp: 60, state: 'drop', worth: 0, code: arrowSeq(), typed: 0, round: 0, hits: 0 };
   c.g.addEventListener('pointerdown', ev => { ev.preventDefault(); ev.stopPropagation(); if (G.mode === 'tap') bossTap(o); });
   G.ents.push(o); G.boss = o;
+  clearForBoss();
   banner('👑 BOSS FIGHT!'); SFX.boss();
   game.classList.remove('shake'); void game.offsetWidth; game.classList.add('shake');
+}
+// the fight is one-on-one: thieves still on the floor run off (dropping any jar back on the shelf),
+// guards stay to patch the glass but stop being traps
+function clearForBoss() {
+  G.lock = null;
+  for (const e of G.ents) {
+    if (e.dead || e.boss) continue;
+    if (e.kind === 'thief') {
+      e.dead = true; e.g.remove(); e.rope?.remove(); e.bub?.remove();
+      poof(e.x, e.y, e.dis ? '#ffffff' : '#3b2f52');
+      if (e.jar != null && !G.jarOn[e.jar]) {
+        const i = e.jar;
+        flyJar({ x: e.x, y: e.y - 150 }, { x: JAR_SPOTS[i][0], y: JAR_SPOTS[i][1] }, JAR_COLORS[i], () => { G.jarOn[i] = true; renderJars(); renderHud(); });
+      }
+    } else { e.safe = true; e.code = ''; e.bub?.remove(); e.bub = null; }
+  }
+  floatText(600, 300, 'The Baron scared them off!', '#ffffff');
 }
 function bossHud() {
   const b = G && G.boss, g = $('#bossHud');
