@@ -436,6 +436,8 @@ function update(dt) {
 function moveHero(dt) {
   const h = G.hero, L = G.L, sp = L.ph * 0.5 * dt;
   let dx = (keys.has('r') - keys.has('l')), dy = (keys.has('d') - keys.has('u'));
+  // only a pan the player is steering can knock a cook over; cooks walking into a parked pan pass by
+  const moving = !!(dx || dy || h.goal);
   if (dx || dy) { const n = Math.hypot(dx, dy); h.x += dx / n * sp; h.y += dy / n * sp; h.goal = null; }
   else if (h.goal) { h.sp = L.ph * 0.5; if (step(h, h.goal.x, h.goal.y, dt)) h.goal = null; }
   h.x = Math.max(31, Math.min(L.W - 31, h.x));
@@ -443,7 +445,7 @@ function moveHero(dt) {
   place(h);
   for (const o of G.ents) {
     if (o.dead || Math.hypot(o.x - h.x, o.y - h.y) > 48) continue;
-    if (o.kind === 'spy') hitSpy(o); else hitCook(o);
+    if (o.kind === 'spy') hitSpy(o); else if (moving) hitCook(o);
   }
 }
 
