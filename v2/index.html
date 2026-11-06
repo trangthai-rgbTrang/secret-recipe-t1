@@ -213,13 +213,13 @@
 const SHIFT = 60, HERBS = 11, RUSH_AT = 50;
 // one entry per 15 s wave, then the RUSH: seconds between spies and spy speed multiplier
 const WAVES = [
-  { every: 2.0, speed: 0.8 },
-  { every: 1.3, speed: 1.15, banner: '⚡🕵️🕵️' },
-  { every: 1.0, speed: 1.35, banner: '⚡⚡🕵️🕵️🕵️' },
-  { every: 0.8, speed: 1.5, banner: '⚡⚡⚡🕵️🕵️🕵️🕵️' },
+  { every: 1.8, speed: 0.85 },
+  { every: 1.1, speed: 1.25, banner: '⚡🕵️🕵️' },
+  { every: 0.85, speed: 1.45, banner: '⚡⚡🕵️🕵️🕵️' },
+  { every: 0.7, speed: 1.6, banner: '⚡⚡⚡🕵️🕵️🕵️🕵️' },
 ];
-const RUSH = { every: 0.55, speed: 1.75, banner: '⏱🔥' };
-const DISGUISE_FROM = 30, DISGUISE_CHANCE = 0.25, PERFECT = 500;
+const RUSH = { every: 0.45, speed: 1.9, banner: '⏱🔥' };
+const DISGUISE_FROM = 20, DISGUISE_CHANCE = 0.3, PERFECT = 500;
 const $ = s => document.querySelector(s);
 const stage = $('#stage'), field = $('#field');
 const store = {
@@ -420,7 +420,7 @@ function update(dt) {
         if (step(o, o.tx, o.ty, dt)) { o.state = 'fix'; o.line.remove(); }
         else drawLine(o.line, o.x, o.y, h.x, h.y);
       } else if (o.state === 'fix') {
-        h.p = Math.min(1, h.p + dt / 1.6);
+        h.p = Math.min(1, h.p + dt / 2.2);
         h.el.classList.add('fix'); h.el.style.setProperty('--p', h.p * 100 + '%');
         if (h.p >= 1) {
           h.done = true; h.el.remove(); G.holes = G.holes.filter(x => x !== h);
