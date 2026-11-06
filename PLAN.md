@@ -50,3 +50,4 @@ Win: at least 1 herb left at 0:00. Lose: all 11 herbs stolen before 0:00. Score:
 | 0:50 | Catching a spy that is running out with a herb sends the herb back to the card | Clear cause and effect in pictures; a few lines of code |
 | 0:51 | Playtest: an idle run lost all 11 herbs in about 25 s, so wave 1 is gentler (a spy every 2 s, 0.8× speed) | Too hard for first-timers |
 | 0:53 | MVP 4 and 5 done. The vault shows 📜 instead of a "SECRET RECIPE" text label | Pictures over words |
+| 0:56 | Playtest (Trang): the end screen only had Play again. Added 🏠 home and 🏆 buttons and a full top 10 screen, also reachable from the title | Players want to see the ranking and go back without starting a new run |

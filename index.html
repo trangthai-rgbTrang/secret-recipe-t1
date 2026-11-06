@@ -108,6 +108,14 @@
   .btn { border: 0; cursor: pointer; width: min(100%, 250px); height: 62px; border-radius: 20px; font: inherit; font-weight: 900; font-size: 21px; letter-spacing: 1.5px; color: #3b1d00;
     background: linear-gradient(#ffd166, var(--gold) 55%, var(--gold-deep)); box-shadow: 0 7px 0 #b45309, 0 16px 28px rgba(251,133,0,.45); }
   .btn:active { transform: translateY(4px); box-shadow: 0 3px 0 #b45309; }
+  .btns { display: flex; gap: 10px; align-items: center; justify-content: center; width: min(100%, 320px); }
+  .btns .btn { flex: 1; }
+  .ico { border: 0; cursor: pointer; width: 62px; height: 62px; flex: none; border-radius: 20px; font-size: 26px; color: var(--cream);
+    background: rgba(255,255,255,.1); border: 1.5px solid rgba(255,255,255,.22); box-shadow: 0 5px 0 rgba(0,0,0,.35); }
+  .ico:active { transform: translateY(3px); box-shadow: 0 2px 0 rgba(0,0,0,.35); }
+  .chipbtn { border: 0; cursor: pointer; font: inherit; color: var(--gold); }
+  #board .lb { width: min(100%, 320px); }
+  #board .lr { font-size: 16px; padding: 8px 10px; }
   .tiny { font-size: 11px; color: var(--muted); line-height: 1.4; }
   .score { width: min(100%, 300px); border-radius: 18px; padding: 10px 14px; text-align: left;
     background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.16); }
@@ -153,7 +161,7 @@
       <span class="rule"><span class="tok h">🌿</span>≥ 1</span>
     </div>
     <button class="btn" id="start">▶ START</button>
-    <span class="chip" id="best" style="color:var(--gold)">🏆 0</span>
+    <button class="chip chipbtn" id="best">🏆 TOP 10</button>
     <div class="tiny">Fan-made for an internal game jam.<br>Not an official game.</div>
   </div>
 
@@ -163,7 +171,21 @@
     <span class="rank" id="rank"></span>
     <div class="score" id="score"></div>
     <div class="lb" id="lb"></div>
-    <button class="btn" id="again">↻ PLAY AGAIN</button>
+    <div class="btns">
+      <button class="ico" id="endHome" aria-label="Home">🏠</button>
+      <button class="btn" id="again">↻ AGAIN</button>
+      <button class="ico" id="endBoard" aria-label="Top 10">🏆</button>
+    </div>
+    <div class="tiny">Fan-made for an internal game jam. Not an official game.</div>
+  </div>
+
+  <div class="menu" id="board">
+    <div class="title">🏆 TOP 10</div>
+    <div class="lb" id="boardList"></div>
+    <div class="btns">
+      <button class="ico" id="boardHome" aria-label="Home">🏠</button>
+      <button class="btn" id="boardPlay">▶ PLAY</button>
+    </div>
     <div class="tiny">Fan-made for an internal game jam. Not an official game.</div>
   </div>
 </div>
@@ -190,7 +212,18 @@ const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;'
 const sameName = (a, b) => a.toLowerCase() === b.toLowerCase();
 function renderLeader() {
   const top = store.get('vg_top', []);
-  $('#best').textContent = top[0] ? `👑 ${top[0].n} · ${top[0].s}` : '👑 —';
+  $('#best').textContent = top[0] ? `🏆 TOP 10 · 👑 ${top[0].n} ${top[0].s}` : '🏆 TOP 10';
+}
+function rows(top, me, n) {
+  if (!top.length) return '<div class="lr"><span class="nm" style="text-align:center">🕵️ … ?</span></div>';
+  return top.slice(0, n).map((e, i) =>
+    `<div class="lr${me && sameName(e.n, me) ? ' me' : ''}"><span class="rk">${['🥇', '🥈', '🥉'][i] || i + 1}</span><span class="nm">${esc(e.n)}</span><b>${e.s}</b></div>`).join('');
+}
+function show(id) {
+  ['title', 'end', 'board'].forEach(s => $('#' + s).classList.toggle('on', s === id));
+  if (id) $('#hud').classList.remove('on');
+  if (id === 'title') { field.innerHTML = ''; renderLeader(); }
+  if (id === 'board') $('#boardList').innerHTML = rows(store.get('vg_top', []), G ? G.name : $('#name').value.trim(), 10);
 }
 $('#name').value = store.get('vg_name', '');
 renderLeader();
@@ -375,7 +408,7 @@ function showBanner(text) {
 function startGame() {
   const name = $('#name').value.trim();
   store.set('vg_name', name);
-  $('#title').classList.remove('on'); $('#end').classList.remove('on');
+  show(null);
   $('#hud').classList.add('on');
   field.innerHTML = '';
   const L = layout();
@@ -402,8 +435,7 @@ function endGame(win) {
   store.set('vg_top', top);
   const rank = 1 + top.filter(e => e.s > total && !sameName(e.n, G.name)).length;
   $('#rank').textContent = `🏆 #${rank}` + (newBest ? ' · NEW BEST' : '');
-  $('#lb').innerHTML = top.slice(0, 5).map((e, i) =>
-    `<div class="lr${sameName(e.n, G.name) ? ' me' : ''}"><span class="rk">${['🥇', '🥈', '🥉'][i] || i + 1}</span><span class="nm">${esc(e.n)}</span><b>${e.s}</b></div>`).join('');
+  $('#lb').innerHTML = rows(top, G.name, 3);
   renderLeader();
   $('#endChip').textContent = win ? '✓ SHIFT COMPLETE' : '✖ VAULT EMPTY';
   const t = $('#endTitle');
@@ -415,18 +447,22 @@ function endGame(win) {
     <div class="r good"><span>🔧🕳️ ${G.patched} × 5</span><b>+${G.patched * 5}</b></div>
     <div class="r bad"><span>🧑‍🍳🚫 ${G.oops} × 50</span><b>−${G.oops * 50}</b></div>
     <div class="tot"><span>⭐</span><b>${total}</b></div>`;
-  $('#hud').classList.remove('on');
-  $('#end').classList.add('on');
+  show('end');
 }
 
 $('#start').addEventListener('click', startGame);
 $('#again').addEventListener('click', startGame);
+$('#boardPlay').addEventListener('click', startGame);
+$('#best').addEventListener('click', () => show('board'));
+$('#endBoard').addEventListener('click', () => show('board'));
+$('#endHome').addEventListener('click', () => show('title'));
+$('#boardHome').addEventListener('click', () => show('title'));
 window.addEventListener('keydown', e => {
   const typing = e.target.tagName === 'INPUT';
+  const inMenu = ['title', 'end', 'board'].some(s => $('#' + s).classList.contains('on'));
   if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key) || (e.key === ' ' && !typing)) e.preventDefault();
-  if ((e.key === ' ' && !typing) || e.key === 'Enter') {
-    if ($('#title').classList.contains('on') || $('#end').classList.contains('on')) { e.preventDefault(); startGame(); }
-  }
+  if (inMenu && ((e.key === ' ' && !typing) || e.key === 'Enter')) { e.preventDefault(); startGame(); }
+  if (inMenu && e.key === 'Escape') show('title');
 });
 
 let last = 0;
