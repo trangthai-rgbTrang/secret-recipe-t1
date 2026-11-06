@@ -1296,8 +1296,12 @@ $('#name').value = store.get('vg_name', '');
 $('#kick').textContent = `TONIGHT'S HEIST · ${DAY}`;
 $('#boardTitle').textContent = `Tonight · ${DAY}`;
 if (RIVAL) $('#rivalCall').textContent = `⚔️ ${RIVAL.n} challenged you: beat ${RIVAL.s}`;
+// a local copy (file:, data: in an app preview, or localhost) has no address a friend can open
+const PUBLIC_URL = 'https://trangthai-rgbtrang.github.io/secret-recipe-t1/v6/';
+const shareBase = () => /^https?:$/.test(location.protocol) && !/^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname)
+  ? location.origin + location.pathname : PUBLIC_URL;
 $('#challenge').addEventListener('click', () => {
-  const link = `${location.origin}${location.pathname}?vs=${encodeURIComponent(G.name)}&score=${G.total}&mode=${G.mode}`;
+  const link = `${shareBase()}?vs=${encodeURIComponent(G.name)}&score=${G.total}&mode=${G.mode}`;
   // show the link right away so it can be copied by hand if the clipboard is blocked
   $('#toast').textContent = link;
   navigator.clipboard?.writeText(link).then(() => { $('#toast').textContent = 'Link copied: send it to a friend'; }, () => {});
