@@ -287,6 +287,10 @@
     <rect x="254" y="207" width="122" height="12" rx="6" fill="#4a3f55"/>
     <rect id="meterFill" x="254" y="207" width="0" height="12" rx="6" fill="#ffcf4a"/>
   </g>
+  <g id="lives" opacity="0" pointer-events="none">
+    <rect x="236" y="236" width="128" height="32" rx="10" fill="#23182b" opacity=".85"/>
+    <text id="livesTxt" x="300" y="259" text-anchor="middle" font-size="18"></text>
+  </g>
   <g id="bossHud" opacity="0" pointer-events="none">
     <rect x="420" y="62" width="360" height="62" rx="14" fill="#23182b" opacity=".85"/>
     <text x="600" y="86" text-anchor="middle" font-size="16" font-weight="900" letter-spacing="3" fill="#ffcf4a">👑 THE SPICE BARON</text>
@@ -303,16 +307,16 @@
 <div class="menu on landing" id="title"><div class="hero">
   <div class="kicker" id="kick">KFC KITCHEN MUSEUM · AFTER DARK</div>
   <h1 class="mega">The Recipe<br>Heist</h1>
-  <p class="tag">11 secret herbs. 60 seconds. Every thief in town wants them. Survive to 0:10 and fight the Spice Baron 👑</p>
+  <p class="tag">11 secret herbs. 60 seconds. Every thief in town wants them. Catch them fast, fill the 👑 meter and take on the Spice Baron.</p>
   <div class="rivalCall" id="rivalCall"></div>
   <div class="cast">
     <div class="who"><svg viewBox="-50 -160 100 170"><g data-clone="thief"></g></svg>👆 +10</div>
     <div class="who"><svg viewBox="-50 -160 100 170"><g data-clone="thief" data-variant="disguise"></g></svg>👆 +20</div>
-    <div class="who"><svg viewBox="-50 -160 100 170"><g data-clone="guard"></g></svg>🚫 −50</div>
+    <div class="who"><svg viewBox="-50 -160 100 170"><g data-clone="guard"></g></svg>🚫 3× = fired</div>
   </div>
   <label class="input"><span>👤</span><input id="name" maxlength="14" placeholder="Your name" autocomplete="off" enterkeyhint="go"></label>
   <div class="btns"><button class="btn" id="start">⌨️ KEYS</button><button class="btn alt" id="startTap">👆 TAP</button><button class="ico" id="toBoard" aria-label="Top 10">🏆</button></div>
-  <div class="modeNote">⌨️ Only the home row: press the key above a thief. Guards wear keys too: those are traps.</div>
+  <div class="modeNote">⌨️ Only the home row: press the key above a thief. Guards wear keys too: those are traps. Wrong keys jam the keyboard.</div>
   <div class="champ" id="champ"></div>
   <div class="tiny">Fan-made for an internal game jam. Not an official game. · <a href="../" style="color:inherit">v1</a></div>
 </div></div>
@@ -350,6 +354,9 @@ const SHIFT = 60, JARS = 11, RUSH_AT = 50, PERFECT = 500, DISGUISE_FROM = 20, DI
 // the Baron drops in at 40 s at the latest, so everyone gets ~20 s to fight him; filling the crown meter
 // (a catch adds 1, a jar carried out of the door takes 3 off) brings him in earlier, never before 25 s
 const BOSS_LATEST = 40, BOSS_EARLIEST = 25, HEAT_FULL = 32, HEAT_STEAL = 3;
+// arresting a guard costs a life; the third one gets you fired. A key nobody wears jams the keyboard
+// for a moment, longer for each miss in a row, so mashing the home row is slower than reading the keys
+const LIVES = 3, JAM_SECS = [.4, .7, 1];
 // waves only open new entrances; pace() below ramps speed smoothly so there is no sudden jump
 const WAVES = [
   { ways: ['doorL', 'doorR'] },
@@ -544,6 +551,11 @@ function renderJars() {
   });
 }
 function liveScore() { return G.jarOn.filter(Boolean).length * 100 + G.pts; }
+function renderLives() {
+  const on = !!G && !G.over;
+  $('#lives').setAttribute('opacity', on ? 1 : 0);
+  if (on) $('#livesTxt').textContent = Array.from({ length: LIVES }, (_, i) => i < G.lives ? '👮' : '💔').join(' ');
+}
 function renderMeter() {
   const on = !!G && !G.over && !G.boss;
   $('#meter').setAttribute('opacity', on ? 1 : 0);
@@ -553,7 +565,7 @@ function renderMeter() {
 }
 // the live row is "your score if the shift ended now", ranked against every saved best on this device
 function renderHud() {
-  renderMeter();
+  renderMeter(); renderLives();
   const rows = TOP.map(e => ({ n: e.n, s: e.s, b: e.b }));
   if (RIVAL && !TOP.some(e => sameName(e.n, RIVAL.n))) rows.push({ n: RIVAL.n, s: RIVAL.s, rival: true });
   if (G) rows.push({ n: G.name, s: liveScore(), me: true });
@@ -663,9 +675,10 @@ function renderKbd() {
   // during the boss fight the strip shows the four arrows instead of the letters
   const fight = G.boss && G.boss.state === 'fight';
   const pool = fight ? ['ArrowLeft', 'ArrowUp', 'ArrowRight', 'ArrowDown'] : keyPool(), used = fight ? new Set(pool) : usedKeys();
-  const w = 52, gap = 8, x0 = 600 - (pool.length * (w + gap) - gap) / 2;
+  const w = 52, gap = 8, x0 = 600 - (pool.length * (w + gap) - gap) / 2, jammed = G.t < G.jamUntil;
+  if (jammed) el('text', { x: x0 - 30, y: 690, 'text-anchor': 'middle', 'font-size': 26 }, g).textContent = '🔒';
   pool.forEach((ch, i) => {
-    const x = x0 + i * (w + gap), on = used.has(ch), hit = G.pressed === ch && G.t - G.pressedAt < .15, y = hit ? 664 : 658;
+    const x = x0 + i * (w + gap), on = used.has(ch) && !jammed, hit = G.pressed === ch && G.t - G.pressedAt < .15, y = hit ? 664 : 658;
     el('rect', { x, y: 664, width: w, height: 46, rx: 9, fill: '#0d0a14', opacity: .6 }, g);
     el('rect', { x, y, width: w, height: 46, rx: 9, fill: hit ? '#ffffff' : on ? (KEY_COLORS[ch] || '#fff1b8') : '#3a3348', stroke: '#23182b', 'stroke-width': 3 }, g);
     el('text', { x: x + w / 2, y: y + 30, 'text-anchor': 'middle', 'font-size': 22, 'font-weight': 900, fill: on || hit ? '#23182b' : '#8f86a3' }, g).textContent = ARROW_GLYPH[ch] || ch;
@@ -778,10 +791,19 @@ function hitGuard(o) {
   SFX.oops();
   game.classList.remove('shake'); void game.offsetWidth; game.classList.add('shake');
   if (o.crack && !o.crack.done) { o.crack.guard = null; o.crack.p = 0; o.crack.respawn = G.t + 2; o.crack.ring.setAttribute('stroke-dasharray', '0 126'); }
+  G.lives--;
+  floatText(o.x, o.y - 205, G.lives ? `💔 ${G.lives} left` : '🚫 FIRED!', '#ff6b7f');
   renderHud();
+  if (!G.lives) { G.fired = true; endGame(false); }
 }
 
+function jam() {
+  G.jamStreak = G.t - G.lastJam < 2 ? Math.min(JAM_SECS.length - 1, G.jamStreak + 1) : 0;
+  G.lastJam = G.t; G.jamUntil = G.t + JAM_SECS[G.jamStreak];
+  floatText(600, 640, 'JAMMED!', '#c9d3e8');
+}
 function miss() {
+  jam();
   if (G.combo) { G.combo = 0; renderHud(); }
   const t = G.ents.find(e => !e.dead && e.kind === 'thief');
   if (t) say(t, ['lol', 'wrong key!', 'nope 😜', 'missed me!'][Math.random() * 4 | 0]);
@@ -789,6 +811,7 @@ function miss() {
 }
 function onKey(k) {
   if (G.micro) return microKey(k);
+  if (G.t < G.jamUntil) return;
   G.pressed = k; G.pressedAt = G.t;
   if (k.startsWith('Arrow')) return bossKey(k);
   if (!/^[A-Z]$/.test(k)) return;
@@ -1236,7 +1259,8 @@ function startGame(mode) {
   G = { t: 0, jarOn: Array(JARS).fill(true), pts: 0, caught: 0, patched: 0, oops: 0, combo: 0, lastCatch: -9, catchPts: 0, comboPts: 0, triples: 0,
     ents: [], cracks: [], over: false, wave: null, next: 0, lastSec: 61, name: name || 'Guest', mode: MODE,
     lock: null, micro: null, microDone: 0, microWins: 0, boss: null, bossDown: false, warned: new Set(), spot: null, hitStop: 0,
-    lost: { thief: 0, boss: 0, micro: 0 }, lowWarned: 0, victory: false, heat: 0, bossCalled: false, bossAt: BOSS_LATEST };
+    lost: { thief: 0, boss: 0, micro: 0 }, lowWarned: 0, victory: false, heat: 0, bossCalled: false, bossAt: BOSS_LATEST,
+    lives: LIVES, fired: false, jamUntil: 0, lastJam: -9, jamStreak: 0 };
   G.microOrder = ['mash', 'arrows', 'fake'].sort(() => microRng() - .5);
   scene.classList.remove('rush');
   renderJars(); renderHud();
@@ -1249,7 +1273,7 @@ function endGame(win) {
   musicStop();
   scene.classList.remove('rush');
   $('#micro').classList.remove('on'); $('#blackout').setAttribute('opacity', 0); codesL.innerHTML = ''; $('#kbd').innerHTML = ''; $('#bossHud').setAttribute('opacity', 0); $('#spotL').innerHTML = '';
-  G.spot = null; renderMeter();
+  G.spot = null; renderMeter(); renderLives();
   outro(win, () => finishGame(win));
 }
 // a 2-second scene so the player sees why the run ended: lost = alarm, the glass shatters, the recipe flies out
@@ -1260,6 +1284,13 @@ function outro(win, done) {
     for (const e of G.ents) if (!e.dead && e.kind === 'thief') { e.dead = true; e.g.remove(); e.rope?.remove(); poof(e.x, e.y, e.dis ? '#ffffff' : '#3b2f52'); }
     floatText(600, 300, 'The recipe is safe!', '#7dffa8');
     setTimeout(done, 1900);
+    return;
+  }
+  if (G.fired) {
+    banner('🚫 FIRED!');
+    [0, 320].forEach(ms => setTimeout(() => beep(220, .3, 'sawtooth', .14, -60), ms));
+    floatText(600, 300, '3 guards arrested', '#ff6b7f');
+    setTimeout(done, 2200);
     return;
   }
   scene.classList.add('alarm');
@@ -1274,7 +1305,7 @@ function outro(win, done) {
 function finishGame(win) {
   scene.classList.remove('alarm');
   const timeBonus = win && G.victory ? Math.max(0, Math.ceil(SHIFT - G.t)) * 10 : 0;
-  const left = G.jarOn.filter(Boolean).length, jarPts = left * 100, perfect = win && left === JARS ? PERFECT : 0, total = Math.max(0, jarPts + G.pts + perfect + timeBonus);
+  const left = G.jarOn.filter(Boolean).length, jarPts = G.fired ? 0 : left * 100, perfect = win && left === JARS ? PERFECT : 0, total = Math.max(0, jarPts + G.pts + perfect + timeBonus);
   const badges = (perfect ? '✨' : '') + (G.triples >= 3 ? '🔥' : '') + (G.oops === 0 && G.caught >= 10 ? '😇' : '') + (G.bossDown ? '👑' : '');
   const merge = list => {
     const out = list.map(e => ({ ...e })), mine = out.find(e => sameName(e.n, G.name));
@@ -1295,13 +1326,14 @@ function finishGame(win) {
   const keptAll = G.jarOn.every(Boolean);
   $('#why').textContent = win
     ? (G.victory ? 'You beat the Spice Baron and saved the recipe!' : `You held the vault for the whole shift.`) + (keptAll ? (lostBy ? ' Every grabbed jar is back on the shelf!' : ' Not a single jar lost!') : ` Jars grabbed: ${lostBy}.`)
+    : G.fired ? 'You arrested 3 of our own guards, so you were sent home. Jars on the shelf do not count.'
     : `All 11 jars were taken, so the recipe was stolen. Jars grabbed: ${lostBy || 'none'}.`;
   const rank = 1 + top.filter(e => e.s > total && !sameName(e.n, G.name)).length;
-  $('#endKick').textContent = win ? 'SHIFT COMPLETE' : 'THE SHELVES ARE EMPTY';
-  const t = $('#endTitle'); t.textContent = win ? 'Recipe safe!' : 'Recipe stolen!'; t.className = 'title ' + (win ? 'win' : 'lose');
+  $('#endKick').textContent = win ? 'SHIFT COMPLETE' : G.fired ? "YOU'RE FIRED" : 'THE SHELVES ARE EMPTY';
+  const t = $('#endTitle'); t.textContent = win ? 'Recipe safe!' : G.fired ? 'Sent home!' : 'Recipe stolen!'; t.className = 'title ' + (win ? 'win' : 'lose');
   $('#rank').textContent = `🏆 #${rank} tonight` + (newBest ? ' · NEW BEST' : '');
   $('#score').innerHTML = `
-    <div class="r"><span>🫙 ${left} × 100</span><b>${jarPts}</b></div>
+    <div class="r"><span>🫙 ${left} × ${G.fired ? '0 (fired)' : 100}</span><b>${jarPts}</b></div>
     <div class="r"><span>🦹 ${G.caught} caught</span><b>${G.catchPts}</b></div>
     <div class="r good"><span>🔥 combo</span><b>+${G.comboPts}</b></div>
     <div class="r good"><span>🔧 ${G.patched} × 5</span><b>+${G.patched * 5}</b></div>
