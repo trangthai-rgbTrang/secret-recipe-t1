@@ -51,6 +51,10 @@
   @keyframes glow { from { opacity: .55; transform: scale(.94); } to { opacity: 1; transform: scale(1.06); } }
   .gone { animation: gone 1.2s ease-in-out infinite; }
   .flash { animation: flash .7s ease-out; }
+  .hurt { animation: hurt .25s ease-out; transform-box: fill-box; transform-origin: 50% 100%; }
+  @keyframes hurt { 25% { transform: translateX(-10px) rotate(-6deg); } 70% { transform: translateX(8px) rotate(4deg); } }
+  #codes .danger { animation: danger .35s ease-in-out infinite alternate; }
+  @keyframes danger { from { filter: drop-shadow(0 0 0 #ff2346); } to { filter: drop-shadow(0 0 12px #ff2346); } }
   @keyframes flash { from { fill: #ffffff; } }
   @keyframes gone { 50% { opacity: .3; } }
   #rushGlow { opacity: 0; pointer-events: none; }
@@ -254,6 +258,13 @@
   <g id="fx" pointer-events="none"></g>
   <rect id="rushGlow" width="1200" height="720" fill="url(#vignette)"/>
   <rect id="blackout" width="1200" height="720" fill="#05060c" opacity="0" pointer-events="none"/>
+  <g id="bossHud" opacity="0" pointer-events="none">
+    <rect x="420" y="62" width="360" height="62" rx="14" fill="#23182b" opacity=".85"/>
+    <text x="600" y="86" text-anchor="middle" font-size="16" font-weight="900" letter-spacing="3" fill="#ffcf4a">👑 THE SPICE BARON</text>
+    <rect x="432" y="96" width="336" height="18" rx="9" fill="#4a3f55"/>
+    <rect id="bossHp" x="432" y="96" width="336" height="18" rx="9" fill="#ff4d6d"/>
+  </g>
+  <g id="kbd" pointer-events="none"></g>
   <g id="codes" pointer-events="none"></g>
   <text id="banner" x="600" y="210" text-anchor="middle" font-size="64" font-weight="900" fill="#ffcf4a" stroke="#23182b" stroke-width="4" paint-order="stroke"></text>
 </svg>
@@ -270,7 +281,7 @@
   </div>
   <label class="input"><span>👤</span><input id="name" maxlength="14" placeholder="Your name" autocomplete="off" enterkeyhint="go"></label>
   <div class="btns"><button class="btn" id="start">⌨️ KEYS</button><button class="btn alt" id="startTap">👆 TAP</button><button class="ico" id="toBoard" aria-label="Top 10">🏆</button></div>
-  <div class="modeNote">⌨️ Press the letter above a thief. Guards wear letters too: those are traps.</div>
+  <div class="modeNote">⌨️ Only the home row: press the key above a thief. Guards wear keys too: those are traps.</div>
   <div class="champ" id="champ"></div>
   <div class="tiny">Fan-made for an internal game jam. Not an official game. · <a href="../" style="color:inherit">v1</a></div>
 </div></div>
@@ -499,31 +510,55 @@ function place(o) {
   o.g.setAttribute('transform', `translate(${o.x} ${o.y})`);
   const k = o.scale || 1;
   o.inner.setAttribute('transform', `scale(${o.face < 0 ? -k : k} ${k})`);
-  if (o.bub) o.bub.setAttribute('transform', `translate(${o.x} ${Math.max(40, o.y - 178 * k)})`);
+  if (o.bub) o.bub.setAttribute('transform', o.boss ? `translate(${o.x} ${o.y - 410}) scale(1.35)` : `translate(${o.x} ${Math.max(40, o.y - 178 * k)})`);
 }
 // ⌨️ keys mode: everyone on screen wears a different first letter; guards' letters are traps
 const codesL = $('#codes');
+const KEY_COLORS = { A: '#ff6b6b', S: '#ffa94d', D: '#ffd43b', F: '#69db7c', G: '#38d9a9', H: '#4dabf7', J: '#748ffc', K: '#da77f2', L: '#f783ac' };
+const ARROW_GLYPH = { ArrowLeft: '←', ArrowUp: '↑', ArrowRight: '→', ArrowDown: '↓' };
+// six keys under the resting fingers for the first 20 s, then the whole home row (nine keys)
+const keyPool = () => [...(G.t < 20 ? 'SDFJKL' : 'ASDFGHJKL')];
+const usedKeys = except => new Set(G.ents.filter(e => e !== except && !e.dead && e.code).map(e => e.code[0]));
+const freeKeys = except => keyPool().filter(c => !usedKeys(except).has(c));
+// gives o a key nobody else on screen is wearing; false when every key in the pool is taken
 function pickCode(o) {
-  const used = new Set(G.ents.filter(e => e !== o && !e.dead && e.code).map(e => e.code[0]));
-  const ALPHA = [...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'].filter(c => !used.has(c));
-  const easy = [...'ASDFJKL'].filter(c => !used.has(c));
-  let first = (G.t < 20 && easy.length ? easy : ALPHA)[codeRng() * (G.t < 20 && easy.length ? easy : ALPHA).length | 0];
-  const look = [...'BDPQ'].filter(c => !used.has(c));
-  if (G.t >= 20 && look.length && codeRng() < .2) first = look[codeRng() * look.length | 0];
-  o.lower = G.t >= 20 && 'BDPQ'.includes(first);
-  o.code = first;
-  if (o.kind === 'thief' && !o.dis && G.t >= 40 && codeRng() < .35) o.code += 'ASDFJKL'[codeRng() * 7 | 0];
+  const free = freeKeys(o);
+  if (!free.length) return false;
+  o.code = free[codeRng() * free.length | 0];
+  if (o.kind === 'thief' && !o.dis && G.t >= 40 && codeRng() < .35) { const pool = keyPool(); o.code += pool[codeRng() * pool.length | 0]; }
   o.typed = 0;
+  return true;
 }
+// a coloured keycap above the head; typed keys of a 2-key code turn into a pressed (dark) cap
 function renderBubble(o) {
   if (!o.bub) o.bub = el('g', {}, codesL);
-  const w = 30 + o.code.length * 24, fill = o.danger ? '#ff8098' : '#fffaf0';
   o.bub.innerHTML = '';
-  el('path', { d: 'M-9 12 L0 26 L9 12 Z', fill, stroke: '#23182b', 'stroke-width': 4, 'stroke-linejoin': 'round' }, o.bub);
-  el('rect', { x: -w / 2, y: -28, width: w, height: 42, rx: 12, fill, stroke: '#23182b', 'stroke-width': 4 }, o.bub);
-  const t = el('text', { x: 0, y: 4, 'text-anchor': 'middle', 'dominant-baseline': 'middle', 'font-size': 30, 'font-weight': 900, 'font-family': 'ui-monospace, Menlo, Consolas, monospace' }, o.bub);
-  [...o.code].forEach((ch, i) => { const sp = el('tspan', { fill: i < o.typed ? '#d18b00' : '#23182b' }, t); sp.textContent = o.lower ? ch.toLowerCase() : ch; });
+  o.bub.setAttribute('class', o.danger ? 'danger' : '');
+  const keys = [...(Array.isArray(o.code) ? o.code : o.code)], step = 60, x0 = -(keys.length - 1) * step / 2;
+  keys.forEach((ch, i) => {
+    const x = x0 + i * step, done = i < o.typed;
+    const col = done ? '#4a3f55' : (KEY_COLORS[ch] || '#fff1b8');
+    el('rect', { x: x - 27, y: -30, width: 54, height: 56, rx: 12, fill: '#23182b' }, o.bub);
+    el('rect', { x: x - 27, y: -36, width: 54, height: 54, rx: 12, fill: col, stroke: '#23182b', 'stroke-width': 4 }, o.bub);
+    el('rect', { x: x - 19, y: -30, width: 38, height: 8, rx: 4, fill: '#ffffff', opacity: done ? .1 : .45 }, o.bub);
+    const t = el('text', { x, y: -6, 'text-anchor': 'middle', 'dominant-baseline': 'middle', 'font-size': 34, 'font-weight': 900,
+      'font-family': 'ui-rounded, "SF Pro Rounded", system-ui, sans-serif', fill: done ? '#9d93ad' : '#23182b' }, o.bub);
+    t.textContent = ARROW_GLYPH[ch] || ch;
+  });
+  el('path', { d: 'M-9 24 L0 36 L9 24 Z', fill: '#23182b' }, o.bub);
   place(o);
+}
+// the strip of keycaps along the floor: lit when someone is wearing that key
+function renderKbd() {
+  const g = $('#kbd'); g.innerHTML = '';
+  if (!G || G.over || G.mode !== 'keys') return;
+  const pool = keyPool(), used = usedKeys(), w = 52, gap = 8, x0 = 600 - (pool.length * (w + gap) - gap) / 2;
+  pool.forEach((ch, i) => {
+    const x = x0 + i * (w + gap), on = used.has(ch), hit = G.pressed === ch && G.t - G.pressedAt < .15, y = hit ? 664 : 658;
+    el('rect', { x, y: 664, width: w, height: 46, rx: 9, fill: '#0d0a14', opacity: .6 }, g);
+    el('rect', { x, y, width: w, height: 46, rx: 9, fill: hit ? '#ffffff' : on ? KEY_COLORS[ch] : '#3a3348', stroke: '#23182b', 'stroke-width': 3 }, g);
+    el('text', { x: x + w / 2, y: y + 30, 'text-anchor': 'middle', 'font-size': 22, 'font-weight': 900, fill: on || hit ? '#23182b' : '#8f86a3' }, g).textContent = ch;
+  });
 }
 function say(o, text) {
   const x = o.x, y = o.y - 178 * (o.scale || 1) - 40;
@@ -551,7 +586,7 @@ function spawnThief(opts = {}) {
   if (opts.hint) o.hint = el('path', { class: 'hint', d: G.mode === 'keys' ? 'M-16 -240 h32 l-16 24 z' : 'M-16 -200 h32 l-16 24 z', fill: '#ffcf4a', stroke: '#23182b', 'stroke-width': 3 }, c.inner);
   c.g.addEventListener('pointerdown', ev => { ev.preventDefault(); ev.stopPropagation(); if (G.mode === 'tap') hitThief(o); });
   G.ents.push(o);
-  if (G.mode === 'keys') { pickCode(o); renderBubble(o); } else place(o);
+  if (G.mode === 'keys' && pickCode(o)) renderBubble(o); else place(o);
   return o;
 }
 function hitThief(o) {
@@ -586,8 +621,10 @@ function takeJar(o) {
   return i;
 }
 function steal(o) {
-  if (o.boss) { o.jars = [takeJar(o), takeJar(o), takeJar(o)].filter(i => i >= 0); say(o, 'MWAHAHA!'); }
-  else { const i = takeJar(o); if (i < 0) return; o.jar = i; say(o, ['Too slow!', 'Yoink!', 'Bye bye recipe!', 'lol'][Math.random() * 4 | 0]); }
+  const i = takeJar(o);
+  if (i < 0) return;
+  o.jar = i;
+  say(o, ['Too slow!', 'Yoink!', 'Bye bye recipe!', 'lol'][Math.random() * 4 | 0]);
   o.danger = false; if (o.bub) renderBubble(o);
   o.hint?.remove();
   crack();
@@ -617,7 +654,7 @@ function spawnGuard(c, hint) {
   }
   ch.g.addEventListener('pointerdown', ev => { ev.preventDefault(); ev.stopPropagation(); if (G.mode === 'tap') hitGuard(o); });
   c.guard = o; G.ents.push(o);
-  if (G.mode === 'keys') { pickCode(o); renderBubble(o); } else place(o);
+  if (G.mode === 'keys' && pickCode(o)) renderBubble(o); else place(o);
 }
 function hitGuard(o) {
   if (o.dead || G.over) return;
@@ -639,7 +676,8 @@ function miss() {
 }
 function onKey(k) {
   if (G.micro) return microKey(k);
-  if (/^[1-6]$/.test(k)) return bossKey(k);
+  if (k.startsWith('Arrow')) return bossKey(k);
+  G.pressed = k; G.pressedAt = G.t;
   if (!/^[A-Z]$/.test(k)) return;
   const lock = G.lock && !G.lock.dead ? G.lock : null;
   if (lock) {
@@ -654,28 +692,57 @@ function onKey(k) {
 }
 
 // boss: a giant thief slides down the rope in the last 10 s; type his 6 digits before he reaches the dome
+// boss fight: the Spice Baron drops into the hall for the last 10 s. Three rounds of four arrows;
+// every right arrow is a punch, a wrong one (or being too slow) lets him swipe a jar.
+const BOSS_ROUNDS = 3, BOSS_ARROWS = 4, BOSS_ATTACK_EVERY = 2.6;
+const arrowSeq = () => Array.from({ length: BOSS_ARROWS }, () => ['ArrowLeft', 'ArrowUp', 'ArrowRight', 'ArrowDown'][codeRng() * 4 | 0]);
 function spawnBoss() {
   const c = makeChar('thief'); c.body.setAttribute('class', 'idle');
-  c.body.querySelector('.bob').insertAdjacentHTML('beforeend', '<path class="o" d="M-24 -150 L-24 -176 L-12 -162 L0 -182 L12 -162 L24 -176 L24 -150 Z" fill="#ffcf4a"/>');
-  const o = { kind: 'thief', boss: true, way: 'rope', ...c, scale: 1.7, path: [{ x: 520, y: 0 }, { x: 520, y: 250 }], i: 1, x: 520, y: 0, face: 1, sp: 30, state: 'in', worth: 0,
-    code: Array.from({ length: 6 }, () => String(1 + (codeRng() * 6 | 0))).join(''), typed: 0 };
-  o.rope = el('line', { x1: 520, y1: 0, x2: 520, y2: 0, stroke: '#e9d9b0', 'stroke-width': 6 }, $('#ropes'));
-  G.ents.push(o); G.boss = o; renderBubble(o);
-  banner('👑 THE SPICE BARON!'); SFX.boss(); say(o, 'Type my code... if you can!');
+  c.body.querySelector('.bob').insertAdjacentHTML('afterbegin', '<path class="o" d="M-30 -66 Q-58 -10 -44 0 L44 0 Q58 -10 30 -66 Z" fill="#c0313d"/>');
+  c.body.querySelector('.bob').insertAdjacentHTML('beforeend',
+    '<path class="o" d="M-24 -150 L-24 -176 L-12 -162 L0 -182 L12 -162 L24 -176 L24 -150 Z" fill="#ffcf4a"/>' +
+    '<path d="M-20 -72 Q-10 -64 0 -70 Q10 -64 20 -72" stroke="#23182b" stroke-width="5" fill="none" stroke-linecap="round"/>');
+  const o = { kind: 'thief', boss: true, way: 'drop', ...c, scale: 2.1, path: [{ x: 600, y: -120 }, { x: 600, y: 668, s: 12 }], i: 1, x: 600, y: -120, face: 1,
+    sp: 60, state: 'drop', worth: 0, code: arrowSeq(), typed: 0, round: 0, hits: 0 };
+  G.ents.push(o); G.boss = o;
+  banner('👑 BOSS FIGHT!'); SFX.boss();
+  game.classList.remove('shake'); void game.offsetWidth; game.classList.add('shake');
+}
+function bossHud() {
+  const b = G && G.boss, g = $('#bossHud');
+  g.setAttribute('opacity', b && !b.dead && b.state === 'fight' ? 1 : 0);
+  if (!b) return;
+  const left = 1 - b.hits / (BOSS_ROUNDS * BOSS_ARROWS);
+  $('#bossHp').setAttribute('width', Math.max(0, 336 * left));
 }
 function bossKey(k) {
   const b = G.boss;
-  if (!b || b.dead) return miss();
-  if (b.code[b.typed] !== k) { b.typed = 0; renderBubble(b); say(b, 'Hah! Start over!'); SFX.miss(); return; }
-  b.typed++; renderBubble(b); SFX.tick();
-  if (b.typed < b.code.length) return;
-  b.dead = true; b.g.remove(); b.rope?.remove(); b.bub?.remove();
+  if (!b || b.dead || b.state !== 'fight') return miss();
+  if (b.code[b.typed] !== k) { b.typed = 0; renderBubble(b); say(b, 'Hah! Too slow!'); SFX.miss(); bossAttack(b); return; }
+  b.typed++; b.hits++;
+  b.body.classList.remove('hurt'); void b.body.getBBox(); b.body.classList.add('hurt');
+  floatText(b.x + (Math.random() * 160 - 80), b.y - 200 - Math.random() * 120, ['POW!', 'BAM!', 'WHAM!', 'OOF!'][Math.random() * 4 | 0], '#ffcf4a');
+  beep(180 + b.hits * 25, .09, 'square', .16, -80);
+  bossHud();
+  if (b.typed < b.code.length) return renderBubble(b);
+  b.round++;
+  if (b.round < BOSS_ROUNDS) { b.code = arrowSeq(); b.typed = 0; b.attackAt = G.t + BOSS_ATTACK_EVERY; renderBubble(b); say(b, ['Ouch!', 'Lucky punch!', 'Grrr!'][b.round - 1] || 'Ouch!'); return; }
+  b.dead = true; b.g.remove(); b.bub?.remove();
   G.pts += 300; G.bossDown = true;
-  poof(b.x - 40, b.y, '#3b2f52'); poof(b.x + 40, b.y - 60, '#ffcf4a');
+  poof(b.x - 60, b.y, '#3b2f52'); poof(b.x + 60, b.y - 80, '#ffcf4a'); poof(b.x, b.y - 180, '#c0313d');
   floatText(b.x, b.y - 300, '+300', '#ffcf4a');
-  banner('👑 BARON DOWN!'); SFX.patch();
+  banner('K.O.!'); SFX.patch(); bossHud();
   (b.jars || []).forEach(i => flyJar({ x: b.x, y: b.y - 250 }, { x: JAR_SPOTS[i][0], y: JAR_SPOTS[i][1] }, JAR_COLORS[i], () => { G.jarOn[i] = true; renderJars(); renderHud(); }));
   renderHud();
+}
+// the baron swipes a jar: on a wrong arrow, or when the player leaves him alone too long
+function bossAttack(b) {
+  b.attackAt = G.t + BOSS_ATTACK_EVERY;
+  const i = takeJar(b);
+  if (i < 0) return;
+  (b.jars = b.jars || []).push(i);
+  say(b, 'MINE!');
+  if (G.jarOn.every(on => !on)) endGame(false);
 }
 
 // WarioWare-style interruptions: the shift pauses for a 3-second mini challenge
@@ -752,7 +819,11 @@ function update(dt) {
   }
   if (!G.guide && G.t >= .3) { G.guide = true; spawnThief({ way: 'doorL', sp: 60, hint: true }); }
   if (!G.guideGuard && G.t >= 1.6) { G.guideGuard = true; crack(); spawnGuard(G.cracks[G.cracks.length - 1], true); }
-  if (G.t >= 3.5 && G.t >= G.next) { spawnThief(); G.next = G.t + pace(G.t).every; }
+  if (G.t >= 3.5 && G.t >= G.next) {
+    // never two characters on the same key: wait for a free key before letting the next thief in
+    if (G.mode === 'keys' && (G.boss || freeKeys().length < 2)) G.next = G.t + .25;
+    else { spawnThief(); G.next = G.t + pace(G.t).every; }
+  }
   // at most two guards on the floor at once, so they never hide the thieves
   const busy = G.ents.filter(o => o.kind === 'guard' && !o.dead && o.state !== 'out').length;
   const waiting = G.cracks.find(c => !c.guard && !c.done && G.t >= c.respawn);
@@ -761,8 +832,14 @@ function update(dt) {
   for (const o of G.ents) {
     if (o.dead) continue;
     if (o.kind === 'thief') {
-      if (G.t < (G.freezeUntil || 0) && !o.boss) { place(o); continue; }
-      if (G.mode === 'keys' && o.dis && G.t >= (o.swapAt || 0) && G.lock !== o) { pickCode(o); renderBubble(o); o.swapAt = G.t + 1.5; }
+      if (o.boss) {
+        if (o.state === 'drop' && follow(o, dt)) { o.state = 'fight'; o.attackAt = G.t + BOSS_ATTACK_EVERY; renderBubble(o); bossHud(); say(o, 'Arrow keys... if you dare!'); game.classList.remove('shake'); void game.offsetWidth; game.classList.add('shake'); }
+        else if (o.state === 'fight' && G.t >= o.attackAt) bossAttack(o);
+        if (G.over) return;
+        place(o); continue;
+      }
+      if (G.t < (G.freezeUntil || 0)) { place(o); continue; }
+      if (G.mode === 'keys' && o.dis && G.t >= (o.swapAt || 0) && G.lock !== o) { if (pickCode(o)) renderBubble(o); o.swapAt = G.t + 1.5; }
       const arrived = follow(o, dt);
       if (o.bub && o.state === 'in') {
         const wp = o.path[o.path.length - 1], near = Math.hypot(wp.x - o.x, wp.y - o.y) < 90;
@@ -793,6 +870,7 @@ function update(dt) {
     place(o);
   }
   G.ents = G.ents.filter(o => !o.dead);
+  renderKbd();
 }
 
 function renderRows(top, me, n) {
@@ -826,12 +904,12 @@ function show(id) {
     $('#boardList').innerHTML = renderRows(TOP, me, 10);
     $('#allList').innerHTML = renderRows(ALL, me, 5);
   }
-  if (id === 'title') { codesL.innerHTML = ''; ents.innerHTML = ''; $('#ropes').innerHTML = ''; $('#cracks').innerHTML = ''; fxL.innerHTML = ''; FX.length = 0; G = null; scene.classList.remove('rush'); $('#secs').textContent = ''; renderJars(); renderHud(); }
+  if (id === 'title') { codesL.innerHTML = ''; $('#kbd').innerHTML = ''; $('#bossHud').setAttribute('opacity', 0); ents.innerHTML = ''; $('#ropes').innerHTML = ''; $('#cracks').innerHTML = ''; fxL.innerHTML = ''; FX.length = 0; G = null; scene.classList.remove('rush'); $('#secs').textContent = ''; renderJars(); renderHud(); }
 }
 
 function startGame(mode) {
   if (mode && mode !== MODE) { MODE = mode; TOP = store.get(dayKey(), []); ALL = store.get(allKey(), []); refreshTop(); }
-  $('#micro').classList.remove('on'); $('#blackout').setAttribute('opacity', 0); codesL.innerHTML = '';
+  $('#micro').classList.remove('on'); $('#blackout').setAttribute('opacity', 0); codesL.innerHTML = ''; $('#kbd').innerHTML = ''; $('#bossHud').setAttribute('opacity', 0);
   if (!AC) { try { AC = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} }
   const name = $('#name').value.trim();
   store.set('vg_name', name);
@@ -849,7 +927,7 @@ function endGame(win) {
   if (G.over) return;
   G.over = true;
   scene.classList.remove('rush');
-  $('#micro').classList.remove('on'); $('#blackout').setAttribute('opacity', 0); codesL.innerHTML = '';
+  $('#micro').classList.remove('on'); $('#blackout').setAttribute('opacity', 0); codesL.innerHTML = ''; $('#kbd').innerHTML = ''; $('#bossHud').setAttribute('opacity', 0);
   const left = G.jarOn.filter(Boolean).length, jarPts = left * 100, perfect = win && left === JARS ? PERFECT : 0, total = Math.max(0, jarPts + G.pts + perfect);
   const badges = (perfect ? '✨' : '') + (G.triples >= 3 ? '🔥' : '') + (G.oops === 0 && G.caught >= 10 ? '😇' : '') + (G.bossDown ? '👑' : '');
   const merge = list => {
@@ -877,7 +955,7 @@ function endGame(win) {
     <div class="r good"><span>🔧 ${G.patched} × 5</span><b>+${G.patched * 5}</b></div>
     <div class="r bad"><span>👮 🚫 ${G.oops} × 50</span><b>−${G.oops * 50}</b></div>
     ${G.mode === 'keys' ? `<div class="r good"><span>⚡ mini-games ${G.microWins}/3</span><b>+${G.microWins * 30}</b></div>` : ''}
-    ${G.bossDown ? '<div class="r good"><span>👑 Spice Baron</span><b>+300</b></div>' : ''}
+    ${G.bossDown ? '<div class="r good"><span>👑 Spice Baron K.O.</span><b>+300</b></div>' : ''}
     ${perfect ? `<div class="r good"><span>✨ 11/11 PERFECT</span><b>+${perfect}</b></div>` : ''}
     <div class="tot"><span>★</span><b>${total}</b></div>`;
   $('#lb').innerHTML = renderRows(top, G.name, 3);
