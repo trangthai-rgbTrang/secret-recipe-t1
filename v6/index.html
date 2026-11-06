@@ -814,48 +814,101 @@ function bossKey(k) {
   b.typed++;
   bossPunch(b);
 }
-// 👆 tap mode: a glowing weak spot pops up somewhere on the baron with a ring closing in on it;
-// tap the spot as the ring closes. Tapping his body, too early or too late, is blocked and he hits back.
-const SPOT_OFFSETS = [[0, -200], [-62, -92], [62, -92], [0, -62], [-38, -262], [44, -150], [-48, -150]];
-const SPOT_TIME = [.9, .75, .6];
+// 👆 tap mode boss: every round of four punches is a different skill.
+// round 1 aim (osu!): a weak spot orbits him, tap it as the ring closes
+// round 2 bombs (Fruit Ninja): one gold spot and two bombs reshuffle fast, hit only the gold
+// round 3 memory (Simon): four spots flash in an order, repeat it
+// tapping his body, a bomb, a spot too early or the wrong spot is blocked and he swipes a jar
+const SPOT_OFFSETS = [[0, -200], [-62, -92], [62, -92], [0, -62], [-38, -262], [44, -150], [-48, -150], [70, -220], [-72, -210]];
+const ROUND_BANNERS = ['🎯 ROUND 1: AIM!', "💣 ROUND 2: DON'T HIT THE BOMBS!", '🧠 ROUND 3: REMEMBER THE ORDER!'];
 function bossTap(b) {
   if (b.dead || b.state !== 'fight' || G.over) return;
   blocked(b);
 }
-function blocked(b) {
-  say(b, ['Blocked!', 'Nope!', 'Too slow!'][Math.random() * 3 | 0]); SFX.miss();
-  clearSpot(); G.spotNext = G.t + .35;
+function blocked(b, text) {
+  say(b, text || ['Blocked!', 'Nope!', 'Too slow!'][Math.random() * 3 | 0]); SFX.miss();
+  clearSpot(); G.spotNext = G.t + .45;
   bossAttack(b);
 }
 function clearSpot() { G.spot?.g.remove(); G.spot = null; }
-function spawnSpot(b) {
-  const [dx, dy] = SPOT_OFFSETS[Math.random() * SPOT_OFFSETS.length | 0], x = b.x + dx, y = b.y + dy;
-  const g = el('g', { transform: `translate(${x} ${y})`, style: 'cursor: crosshair' }, $('#spotL'));
-  const ring = el('circle', { r: 72, fill: 'none', stroke: '#fff', 'stroke-width': 5 }, g);
+function drawSpot(parent, x, y, kind) {
+  const g = el('g', { transform: `translate(${x} ${y})`, style: 'cursor: crosshair' }, parent);
   el('circle', { r: 30, fill: 'transparent' }, g);
-  el('circle', { r: 19, fill: '#ffcf4a', stroke: '#23182b', 'stroke-width': 4 }, g);
-  el('circle', { r: 7, fill: '#ff4d6d' }, g);
-  const sp = G.spot = { g, ring, t: 0, dur: SPOT_TIME[Math.min(b.round, SPOT_TIME.length - 1)] };
-  g.addEventListener('pointerdown', ev => {
-    ev.preventDefault(); ev.stopPropagation();
-    if (G.spot !== sp || b.dead || G.over) return;
-    const k = sp.t / sp.dur;
-    if (k < .7) return blocked(b);
-    const perfect = k >= .84 && k <= .97;
-    floatText(x, y - 40, perfect ? 'PERFECT!' : 'GOOD', perfect ? '#7dffa8' : '#ffffff');
-    clearSpot(); G.spotNext = G.t + .25;
-    bossPunch(b);
-    if (perfect && !b.dead) bossPunch(b);
+  if (kind === 'bomb') {
+    el('circle', { r: 20, fill: '#2b2b33', stroke: '#ff4d6d', 'stroke-width': 4 }, g);
+    el('path', { d: 'M8 -16 Q16 -30 26 -26', stroke: '#c9a227', 'stroke-width': 4, fill: 'none' }, g);
+    el('circle', { cx: 27, cy: -27, r: 5, fill: '#ffcf4a' }, g);
+  } else if (kind === 'dot') {
+    el('circle', { class: 'face', r: 22, fill: '#fff8ec', stroke: '#23182b', 'stroke-width': 4 }, g);
+  } else {
+    el('circle', { r: 19, fill: '#ffcf4a', stroke: '#23182b', 'stroke-width': 4 }, g);
+    el('circle', { r: 7, fill: '#ff4d6d' }, g);
+  }
+  return g;
+}
+function onSpot(g, fn) { g.addEventListener('pointerdown', ev => { ev.preventDefault(); ev.stopPropagation(); if (!G.over) fn(); }); }
+function tapBossTick(b, dt) {
+  const round = Math.min(2, Math.floor(b.hits / BOSS_ARROWS));
+  if (round !== G.tapRound) { clearSpot(); G.tapRound = round; G.spotNext = G.t + .9; banner(ROUND_BANNERS[round]); }
+  // the memory round has its own time limit, so his regular swipe waits
+  if (round === 2) b.attackAt = Math.max(b.attackAt, G.t + 1);
+  if (!G.spot) { if (G.t >= G.spotNext) [spawnOrbit, spawnBombs, spawnSimon][round](b); return; }
+  G.spot.t += dt;
+  G.spot.tick?.(dt);
+}
+function spawnOrbit(b) {
+  const g = drawSpot($('#spotL'), 0, 0, 'gold');
+  const ring = el('circle', { r: 72, fill: 'none', stroke: '#fff', 'stroke-width': 5 }, g);
+  const sp = G.spot = { g, t: 0, dur: .9, ang: Math.random() * 6.28 };
+  sp.tick = dt => {
+    sp.ang += dt * 3.1;
+    const x = b.x + Math.cos(sp.ang) * 125, y = b.y - 150 + Math.sin(sp.ang) * 95, k = sp.t / sp.dur;
+    g.setAttribute('transform', `translate(${x} ${y})`); sp.x = x; sp.y = y;
+    ring.setAttribute('r', Math.max(19, 72 - 53 * k)); ring.setAttribute('stroke', k >= .82 ? '#7dffa8' : '#fff');
+    if (k >= 1) { clearSpot(); G.spotNext = G.t + .3; }
+  };
+  sp.tick(0);
+  onSpot(g, () => {
+    if (G.spot !== sp) return;
+    if (sp.t / sp.dur < .7) return blocked(b, 'Too early!');
+    floatText(sp.x, sp.y - 40, 'HIT!', '#7dffa8');
+    clearSpot(); G.spotNext = G.t + .25; bossPunch(b);
   });
 }
-function tickSpot(b, dt) {
-  if (G.spot) {
-    G.spot.t += dt;
-    const k = G.spot.t / G.spot.dur;
-    G.spot.ring.setAttribute('r', Math.max(19, 72 - 53 * k));
-    G.spot.ring.setAttribute('stroke', k >= .84 ? '#7dffa8' : '#ffffff');
-    if (k >= 1) { clearSpot(); G.spotNext = G.t + .3; }
-  } else if (G.t >= (G.spotNext || 0)) spawnSpot(b);
+function spawnBombs(b) {
+  const g = el('g', {}, $('#spotL')), sp = G.spot = { g, t: 0 };
+  const picks = SPOT_OFFSETS.slice().sort(() => Math.random() - .5).slice(0, 3), gold = Math.random() * 3 | 0;
+  picks.forEach(([dx, dy], i) => {
+    const x = b.x + dx * 1.15, y = b.y + dy, kind = i === gold ? 'gold' : 'bomb', spot = drawSpot(g, x, y, kind);
+    onSpot(spot, () => {
+      if (G.spot !== sp) return;
+      if (kind === 'bomb') { floatText(x, y - 30, 'BOOM!', '#ff6b7f'); game.classList.remove('shake'); void game.offsetWidth; game.classList.add('shake'); return blocked(b, 'Ha! A bomb!'); }
+      floatText(x, y - 40, 'HIT!', '#7dffa8'); clearSpot(); G.spotNext = G.t + .2; bossPunch(b);
+    });
+  });
+  sp.tick = () => { if (sp.t >= .8) { clearSpot(); G.spotNext = G.t + .1; } };
+}
+function spawnSimon(b) {
+  const g = el('g', {}, $('#spotL')), picks = SPOT_OFFSETS.slice().sort(() => Math.random() - .5).slice(0, 4);
+  const order = [0, 1, 2, 3].sort(() => Math.random() - .5);
+  const sp = G.spot = { g, t: 0, phase: 'show', n: 0, order, dots: [] };
+  picks.forEach(([dx, dy], i) => {
+    const x = b.x + dx * 1.2, y = b.y + dy, dot = drawSpot(g, x, y, 'dot');
+    sp.dots.push(dot.querySelector('.face'));
+    onSpot(dot, () => {
+      if (G.spot !== sp || sp.phase !== 'input') return;
+      if (i !== order[sp.n]) { sp.dots[i].setAttribute('fill', '#ff8098'); return blocked(b, 'Wrong order!'); }
+      sp.dots[i].setAttribute('fill', '#7dffa8'); sp.n++; bossPunch(b);
+      if (sp.n >= order.length && !b.dead) { clearSpot(); G.spotNext = G.t + .4; }
+    });
+  });
+  sp.tick = () => {
+    if (sp.phase === 'show') {
+      const lit = order[Math.floor(sp.t / .5)];
+      sp.dots.forEach((d, i) => d.setAttribute('fill', i === lit ? '#ffcf4a' : '#fff8ec'));
+      if (sp.t >= order.length * .5 + .15) { sp.phase = 'input'; sp.t = 0; sp.dots.forEach(d => d.setAttribute('fill', '#fff8ec')); say(b, 'Your turn!'); }
+    } else if (sp.t >= 3.2) blocked(b, 'Too slow!');
+  };
 }
 // every punch takes one bar off his health; each 4 punches is a round, 3 rounds is a K.O.
 function bossPunch(b) {
@@ -985,7 +1038,7 @@ function update(dt) {
       if (o.boss) {
         if (o.state === 'drop' && follow(o, dt)) { o.state = 'fight'; o.attackAt = G.t + BOSS_ATTACK_EVERY; if (G.mode === 'keys') renderBubble(o); bossHud(); say(o, G.mode === 'keys' ? 'Arrow keys... if you dare!' : 'Hit my weak spot... if you can!'); game.classList.remove('shake'); void game.offsetWidth; game.classList.add('shake'); }
         else if (o.state === 'fight' && G.t >= o.attackAt) bossAttack(o);
-        if (o.state === 'fight' && G.mode === 'tap') tickSpot(o, dt);
+        if (o.state === 'fight' && G.mode === 'tap') tapBossTick(o, dt);
         if (G.over) return;
         place(o); continue;
       }
@@ -1069,7 +1122,7 @@ function startGame(mode) {
   clearDemo(); ents.innerHTML = ''; $('#ropes').innerHTML = ''; $('#cracks').innerHTML = ''; fxL.innerHTML = ''; FX.length = 0;
   G = { t: 0, jarOn: Array(JARS).fill(true), pts: 0, caught: 0, patched: 0, oops: 0, combo: 0, lastCatch: -9, catchPts: 0, comboPts: 0, triples: 0,
     ents: [], cracks: [], over: false, wave: null, next: 0, lastSec: 61, name: name || 'Guest', mode: MODE,
-    lock: null, micro: null, microDone: 0, microWins: 0, boss: null, bossDown: false, warned: new Set(), spot: null, spotNext: 0,
+    lock: null, micro: null, microDone: 0, microWins: 0, boss: null, bossDown: false, warned: new Set(), spot: null, spotNext: 0, tapRound: -1,
     lost: { thief: 0, boss: 0, micro: 0 }, lowWarned: 0 };
   G.microOrder = ['mash', 'arrows', 'fake'].sort(() => microRng() - .5);
   scene.classList.remove('rush');
