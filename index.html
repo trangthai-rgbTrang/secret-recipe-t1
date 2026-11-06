@@ -3,6 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,700;9..144,900&display=swap" rel="stylesheet">
 <title>Vault Guard</title>
 <style>
   :root { --gold: #ffb703; --gold-deep: #fb8500; --spy: #ff4d6d; --herb: #3ecf6e; --cream: #fff7e6; --muted: #a49cc4; }
@@ -12,7 +14,7 @@
     font-family: -apple-system, "SF Pro Rounded", "Segoe UI", system-ui, sans-serif;
     -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
   #stage { position: relative; width: min(100vw, 440px); height: min(100dvh, 820px); overflow: hidden; touch-action: none;
-    background: radial-gradient(130% 75% at 50% 60%, #2c2257 0%, #171130 55%, #0b0917 100%); }
+    background: radial-gradient(45% 30% at 50% 60%, rgba(255,200,120,.16), transparent 70%), radial-gradient(130% 75% at 50% 60%, #22305a 0%, #141b33 55%, #0a0e1c 100%); }
   @media (min-width: 480px) { #stage { border-radius: 28px; box-shadow: 0 0 0 1px rgba(255,255,255,.12), 0 30px 80px rgba(0,0,0,.6); } }
   #stage::before { content: ""; position: absolute; inset: 0; pointer-events: none;
     background: repeating-conic-gradient(from 45deg, rgba(255,255,255,.035) 0 25%, transparent 0 50%) 0 0 / 34px 34px; }
@@ -25,12 +27,16 @@
     background: linear-gradient(#7a4a2a, #4d2c17); box-shadow: inset 0 0 0 3px #2b170b, 0 6px 12px rgba(0,0,0,.45); }
   .door::after { content: ""; position: absolute; top: 10px; left: 50%; transform: translateX(-50%); width: 22px; height: 14px; border-radius: 5px;
     background: #ffd166; opacity: .75; box-shadow: 0 0 12px #ffd166; }
-  .vault { border-radius: 50%; z-index: 2;
-    background: radial-gradient(circle at 35% 28%, #f6f8fc, #a3abbf 45%, #4d566b 100%);
-    box-shadow: 0 0 0 6px #262c3c, 0 0 0 10px #7a8399, 0 0 46px 14px rgba(255,183,3,.33), inset 0 -10px 18px rgba(0,0,0,.35); }
-  .vault::before { content: ""; position: absolute; inset: 27%; border-radius: 50%;
-    background: radial-gradient(circle, #262c3c 0 28%, #d2d8e5 29% 42%, #5b6479 43%); box-shadow: 0 0 0 3px #343c51; }
-  .vault::after { content: "📜"; position: absolute; inset: 0; display: grid; place-items: center; font-size: 22px; opacity: .9; }
+  .vault { border-radius: 50%; z-index: 2; outline: 3px dotted rgba(232,190,80,.9); outline-offset: -11px;
+    background: radial-gradient(circle at 35% 28%, #6b7590, #2f3850 55%, #1a2033 100%);
+    box-shadow: 0 0 0 5px #121726, 0 0 0 10px #c9a227, 0 0 0 12px #6b5210, 0 26px 40px rgba(0,0,0,.65), 0 0 60px 12px rgba(255,190,90,.22),
+      inset 0 -12px 22px rgba(0,0,0,.5), inset 0 8px 14px rgba(255,255,255,.12); }
+  .vault::before { content: ""; position: absolute; inset: 21%; border-radius: 50%;
+    background: radial-gradient(circle closest-side, #fff1b8 0, #e3b53c 55%, #a07a18 90%, transparent 93%) center / 62% 62% no-repeat,
+      repeating-conic-gradient(rgba(58,40,4,.85) 0 2deg, transparent 2deg 15deg),
+      radial-gradient(circle at 38% 32%, #fff1b8, #e3b53c 45%, #a07a18 80%, #6b5210 100%);
+    box-shadow: 0 0 0 3px #5c4510, 0 8px 14px rgba(0,0,0,.55), inset 0 -4px 8px rgba(0,0,0,.35); }
+  .vault::after { content: "📜"; position: absolute; inset: 0; display: grid; place-items: center; font-size: 20px; filter: drop-shadow(0 2px 2px rgba(0,0,0,.5)); }
   .spy, .cook { width: 56px; height: 56px; border-radius: 50%; display: grid; place-items: center; font-size: 30px; cursor: pointer; z-index: 6; }
   .spy { background: radial-gradient(circle at 35% 30%, #ff9db0, var(--spy) 70%); box-shadow: 0 0 0 3px rgba(255,77,109,.35), 0 10px 16px rgba(0,0,0,.5); }
   .cook { background: radial-gradient(circle at 35% 30%, #fff, #bfe8cc 75%); box-shadow: 0 0 0 3px rgba(62,207,110,.7), 0 10px 16px rgba(0,0,0,.5); }
@@ -78,7 +84,7 @@
   .row { display: flex; justify-content: space-between; align-items: center; }
   .ring { width: 54px; height: 54px; border-radius: 50%; display: grid; place-items: center;
     background: conic-gradient(var(--c, var(--gold)) var(--p, 100%), rgba(255,255,255,.12) 0); }
-  .ring span { width: 44px; height: 44px; border-radius: 50%; background: #171130; display: grid; place-items: center; font-weight: 900; font-size: 18px; }
+  .ring span { width: 44px; height: 44px; border-radius: 50%; background: #141b33; display: grid; place-items: center; font-weight: 900; font-size: 18px; }
   .pill { white-space: nowrap; background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.16); border-radius: 999px; padding: 7px 14px; font-weight: 900; font-size: 17px; }
   .card { margin-top: 10px; color: #5a3d12; border-radius: 14px; padding: 8px 11px 9px;
     background: linear-gradient(#fff4d8, #f4dca8); box-shadow: 0 5px 0 #c39a55, 0 12px 22px rgba(0,0,0,.4); }
@@ -88,18 +94,18 @@
   .h.lost { background: transparent; border: 2px dashed #c39a55; font-size: 0; }
 
   .menu { position: absolute; inset: 0; z-index: 20; display: none; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
-    padding: 24px 20px; text-align: center; background: radial-gradient(130% 75% at 50% 45%, #2c2257 0%, #171130 55%, #0b0917 100%); }
+    padding: 24px 20px; text-align: center; background: radial-gradient(55% 35% at 50% 32%, rgba(255,200,120,.18), transparent 70%), radial-gradient(130% 75% at 50% 45%, #22305a 0%, #141b33 55%, #0a0e1c 100%); }
   .menu.on { display: flex; }
   .menu { justify-content: safe center; overflow-y: auto; }
   #end { gap: 10px; background: rgba(11,9,23,.9); backdrop-filter: blur(3px); }
   .chip { white-space: nowrap; display: inline-flex; align-items: center; gap: 5px; padding: 6px 11px; border-radius: 999px; font-size: 12px; font-weight: 800;
     background: rgba(255,255,255,.09); border: 1px solid rgba(255,255,255,.14); }
-  .title { white-space: nowrap; font-weight: 900; letter-spacing: 2px; line-height: 1; font-size: clamp(30px, 10vw, 40px);
+  .title { white-space: nowrap; font-weight: 900; font-family: "Fraunces", Georgia, serif; letter-spacing: .5px; line-height: 1; font-size: clamp(26px, 8.6vw, 38px);
     background: linear-gradient(#fff3c4, var(--gold) 60%, var(--gold-deep)); -webkit-background-clip: text; background-clip: text; color: transparent;
     filter: drop-shadow(0 3px 0 #7c3a00) drop-shadow(0 0 18px rgba(255,183,3,.45)); }
   .title.win { background-image: linear-gradient(#dcfce7, #4ade80 60%, #16a34a); filter: drop-shadow(0 3px 0 #14532d) drop-shadow(0 0 18px rgba(74,222,128,.45)); }
   .title.lose { background-image: linear-gradient(#ffe4e6, #fb7185 60%, #e11d48); filter: drop-shadow(0 3px 0 #4c0519) drop-shadow(0 0 18px rgba(255,77,109,.5)); }
-  .bigvault { position: relative; width: 120px; height: 120px; }
+  .bigvault { position: relative; width: 150px; height: 150px; margin: 6px 0 14px; }
   .story { font-size: 26px; letter-spacing: 2px; white-space: nowrap; }
   .story b { color: var(--spy); }
   .input { display: flex; align-items: center; gap: 8px; width: min(100%, 300px); height: 50px; border-radius: 14px; padding: 0 14px;
