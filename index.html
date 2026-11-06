@@ -34,6 +34,13 @@
   .spy, .cook { width: 56px; height: 56px; border-radius: 50%; display: grid; place-items: center; font-size: 30px; cursor: pointer; z-index: 6; }
   .spy { background: radial-gradient(circle at 35% 30%, #ff9db0, var(--spy) 70%); box-shadow: 0 0 0 3px rgba(255,77,109,.35), 0 10px 16px rgba(0,0,0,.5); }
   .cook { background: radial-gradient(circle at 35% 30%, #fff, #bfe8cc 75%); box-shadow: 0 0 0 3px rgba(62,207,110,.7), 0 10px 16px rgba(0,0,0,.5); }
+  .spy.disguise { background: radial-gradient(circle at 35% 30%, #fff, #bfe8cc 75%); box-shadow: 0 0 0 3px rgba(62,207,110,.7), 0 10px 16px rgba(0,0,0,.5); }
+  .combo { white-space: nowrap; padding: 5px 11px; border-radius: 999px; font-weight: 900; font-size: 15px; color: #04293a; visibility: hidden;
+    background: linear-gradient(#a5f3fc, #38bdf8); box-shadow: 0 0 14px rgba(56,189,248,.7); }
+  .combo.on { visibility: visible; }
+  .target { font-size: 13px; font-weight: 900; text-align: right; margin-top: 4px; white-space: nowrap; }
+  .target.ahead { color: var(--gold); text-shadow: 0 0 10px rgba(255,183,3,.7); }
+  .target.behind { color: #ff8fa3; }
   .tool { position: absolute; right: -6px; top: -6px; width: 24px; height: 24px; border-radius: 50%; background: #fff; display: grid; place-items: center;
     font-size: 14px; box-shadow: 0 0 0 2px #3ecf6e; }
   .link { height: 3px; transform-origin: 0 50%; z-index: 3; border-radius: 2px; pointer-events: none;
@@ -141,7 +148,8 @@
   <div id="hud">
     <div class="row">
       <div class="ring" id="ring"><span id="sec">60</span></div>
-      <div class="pill" id="pts">⭐ 0</div>
+      <span class="combo" id="combo">🔥 ×2</span>
+      <div><div class="pill" id="pts">⭐ 0</div><div class="target" id="target"></div></div>
     </div>
     <div class="card">
       <div class="t"><span>📜 SECRET RECIPE</span><span id="cnt">11 / 11</span></div>
@@ -195,11 +203,12 @@ const SHIFT = 60, HERBS = 11, RUSH_AT = 50;
 // one entry per 15 s wave, then the RUSH: seconds between spies and spy speed multiplier
 const WAVES = [
   { every: 2.0, speed: 0.8 },
-  { every: 1.5, speed: 1.0, banner: '⚡🕵️🕵️' },
-  { every: 1.15, speed: 1.2, banner: '⚡⚡🕵️🕵️🕵️' },
-  { every: 0.95, speed: 1.35, banner: '⚡⚡⚡🕵️🕵️🕵️🕵️' },
+  { every: 1.3, speed: 1.15, banner: '⚡🕵️🕵️' },
+  { every: 1.0, speed: 1.35, banner: '⚡⚡🕵️🕵️🕵️' },
+  { every: 0.8, speed: 1.5, banner: '⚡⚡⚡🕵️🕵️🕵️🕵️' },
 ];
-const RUSH = { every: 0.65, speed: 1.6, banner: '⏱🔥' };
+const RUSH = { every: 0.55, speed: 1.75, banner: '⏱🔥' };
+const DISGUISE_FROM = 30, DISGUISE_CHANCE = 0.25, PERFECT = 500;
 const $ = s => document.querySelector(s);
 const stage = $('#stage'), field = $('#field');
 const store = {
@@ -270,7 +279,20 @@ function renderHerbs() {
   $('#herbs').innerHTML = Array.from({ length: HERBS }, (_, i) => `<span class="h${i < G.herbs ? '' : ' lost'}">🌿</span>`).join('');
   $('#cnt').textContent = `${G.herbs} / ${HERBS}`;
 }
-function renderPts() { $('#pts').textContent = '⭐ ' + G.pts; }
+// the HUD shows the score as if the shift ended now, so it can be compared with the 👑 leader
+function renderPts() {
+  const live = G.herbs * 100 + G.pts, t = $('#target');
+  $('#pts').textContent = '⭐ ' + live;
+  if (!G.target) { t.textContent = ''; return; }
+  const ahead = live >= G.target;
+  t.textContent = `👑 ${G.target} ${ahead ? '▲' : '▼'}`;
+  t.className = 'target ' + (ahead ? 'ahead' : 'behind');
+}
+function renderCombo() {
+  const c = $('#combo');
+  c.textContent = `🔥 ×${G.combo}`;
+  c.classList.toggle('on', G.combo >= 2);
+}
 
 function flyHerb(fromIdx, to, back) {
   const slot = $('#herbs').children[fromIdx];
@@ -290,7 +312,8 @@ function flyHerb(fromIdx, to, back) {
 function spawnSpy(opts = {}) {
   const L = G.L, di = opts.door ?? (Math.random() * 6 | 0), d = L.doors[di];
   const dx = d.x - L.vc.x, dy = d.y - L.vc.y, n = Math.hypot(dx, dy);
-  const o = { kind: 'spy', el: mk('spy', '🕵️'), x: d.x, y: d.y, door: di, size: 56,
+  const disguise = !opts.hint && G.t >= DISGUISE_FROM && Math.random() < DISGUISE_CHANCE;
+  const o = { kind: 'spy', el: mk(disguise ? 'spy disguise' : 'spy', disguise ? '🧑‍🍳' : '🕵️'), x: d.x, y: d.y, door: di, size: 56, worth: disguise ? 20 : 10,
     tx: L.vc.x + dx / n * L.R * 0.95, ty: L.vc.y + dy / n * L.R * 0.95,
     sp: opts.sp || G.spySpeed, state: 'in', carry: false };
   if (opts.hint) o.el.insertAdjacentHTML('beforeend', '<div class="hint">👆</div>');
@@ -301,10 +324,13 @@ function spawnSpy(opts = {}) {
 function hitSpy(o) {
   if (o.dead || G.over) return;
   o.dead = true; o.el.remove();
-  G.caught++; G.pts += 10;
+  G.combo = G.t - G.lastCatch <= 1 ? Math.min(3, G.combo + 1) : 1;
+  G.lastCatch = G.t;
+  const gain = o.worth * G.combo;
+  G.caught++; G.catchPts += o.worth; G.comboPts += gain - o.worth; G.pts += gain;
   if (o.carry && G.herbs < HERBS) { G.herbs++; renderHerbs(); flyHerb(G.herbs - 1, o, true); }
-  fx('burst', o.x, o.y); fx('float', o.x, o.y - 30, '+10', 'var(--gold)');
-  renderPts();
+  fx('burst', o.x, o.y); fx('float', o.x, o.y - 30, `+${gain}` + (G.combo > 1 ? ` ×${G.combo}` : ''), 'var(--gold)');
+  renderCombo(); renderPts();
 }
 
 function makeHole(x, y) {
@@ -329,7 +355,7 @@ function spawnCook(h, ban) {
 function hitCook(o) {
   if (o.dead || G.over) return;
   o.dead = true; o.el.remove(); o.line.remove();
-  G.oops++; G.pts -= 50;
+  G.oops++; G.pts -= 50; G.combo = 0; renderCombo();
   fx('burst bad', o.x, o.y); fx('float', o.x, o.y - 30, '🚫 −50', 'var(--spy)');
   stage.classList.remove('shake'); void stage.offsetWidth; stage.classList.add('shake');
   const h = o.hole;
@@ -364,11 +390,11 @@ function update(dt) {
     if (o.dead) continue;
     if (o.kind === 'spy') {
       if (o.state === 'in' && step(o, o.tx, o.ty, dt)) {
-        G.herbs--; renderHerbs(); flyHerb(G.herbs, o, false);
+        G.herbs--; renderHerbs(); renderPts(); flyHerb(G.herbs, o, false);
         o.carry = true; o.el.insertAdjacentHTML('beforeend', '<span class="carry">🌿</span>');
         o.el.querySelector('.hint')?.remove();
         makeHole(o.tx, o.ty);
-        o.state = 'out'; o.sp *= 1.2;
+        o.state = 'out'; o.sp *= 2;
         if (G.herbs <= 0) return endGame(false);
       } else if (o.state === 'out') {
         const d = G.L.doors[o.door];
@@ -413,7 +439,9 @@ function startGame() {
   field.innerHTML = '';
   const L = layout();
   G = { L, t: 0, herbs: HERBS, pts: 0, caught: 0, patched: 0, oops: 0, ents: [], holes: [], over: false,
-    spySpeed: L.ph * 0.1, wave: null, nextSpawn: 0, name: name || 'Guest' };
+    spySpeed: L.ph * 0.1, wave: null, nextSpawn: 0, name: name || 'Guest',
+    combo: 0, lastCatch: -9, catchPts: 0, comboPts: 0, target: (store.get('vg_top', [])[0] || {}).s || 0 };
+  renderCombo();
   stage.classList.remove('rush');
   L.doors.forEach(d => { const o = { el: mk('door'), x: d.x, y: d.y, size: 46 }; o.el.style.transform = `translate(${d.x - 23}px,${d.y - 31}px)`; });
   const v = { el: mk('vault'), x: L.vc.x, y: L.vc.y, size: L.R * 2 };
@@ -425,7 +453,7 @@ function endGame(win) {
   if (G.over) return;
   G.over = true;
   stage.classList.remove('rush');
-  const herbPts = G.herbs * 100, total = herbPts + G.pts;
+  const herbPts = G.herbs * 100, perfect = win && G.herbs === HERBS ? PERFECT : 0, total = herbPts + G.pts + perfect;
   G.total = total;
   let top = store.get('vg_top', []);
   const mine = top.find(e => sameName(e.n, G.name));
@@ -443,13 +471,21 @@ function endGame(win) {
   t.className = 'title ' + (win ? 'win' : 'lose');
   $('#score').innerHTML = `
     <div class="r"><span>🌿 ${G.herbs} × 100</span><b>${herbPts}</b></div>
-    <div class="r"><span>🕵️ ${G.caught} × 10</span><b>${G.caught * 10}</b></div>
+    <div class="r"><span>🕵️ ${G.caught}</span><b>${G.catchPts}</b></div>
+    <div class="r good"><span>🔥 combo</span><b>+${G.comboPts}</b></div>
     <div class="r good"><span>🔧🕳️ ${G.patched} × 5</span><b>+${G.patched * 5}</b></div>
     <div class="r bad"><span>🧑‍🍳🚫 ${G.oops} × 50</span><b>−${G.oops * 50}</b></div>
+    ${perfect ? `<div class="r good"><span>✨ 11/11 PERFECT</span><b>+${perfect}</b></div>` : ''}
     <div class="tot"><span>⭐</span><b>${total}</b></div>`;
   show('end');
 }
 
+// a tap that misses every spy and cook breaks the combo, so spamming the floor never pays
+stage.addEventListener('pointerdown', () => {
+  if (!G || G.over || !$('#hud').classList.contains('on') || G.combo < 1) return;
+  if (G.combo > 1) fx('float', G.L.vc.x, G.L.vc.y - G.L.R - 20, '🔥✖', '#7dd3fc');
+  G.combo = 0; renderCombo();
+});
 $('#start').addEventListener('click', startGame);
 $('#again').addEventListener('click', startGame);
 $('#boardPlay').addEventListener('click', startGame);
