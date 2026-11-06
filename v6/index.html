@@ -51,6 +51,7 @@
   @keyframes glow { from { opacity: .55; transform: scale(.94); } to { opacity: 1; transform: scale(1.06); } }
   .gone { animation: gone 1.2s ease-in-out infinite; }
   #jars.low { animation: gone .5s ease-in-out infinite; }
+  #meter.full #meterFill { fill: #ff4d6d; animation: gone .4s ease-in-out infinite; }
   .alarm #rushGlow { animation: throb .2s ease-in-out infinite alternate; }
   .why { font-size: 14px; font-weight: 700; color: #5a4a3a; max-width: 340px; line-height: 1.45; }
   .why:empty { display: none; }
@@ -61,6 +62,9 @@
   @keyframes spin { to { transform: rotate(360deg); } }
   .hurt { animation: hurt .25s ease-out; transform-box: fill-box; transform-origin: 50% 100%; }
   @keyframes hurt { 25% { transform: translateX(-10px) rotate(-6deg); } 70% { transform: translateX(8px) rotate(4deg); } }
+  .ouch { opacity: 0; }
+  .hurt .ouch { animation: ouch .45s; }
+  @keyframes ouch { 0%, 75% { opacity: 1; } 100% { opacity: 0; } }
   #codes .danger { animation: danger .35s ease-in-out infinite alternate; }
   @keyframes danger { from { filter: drop-shadow(0 0 0 #ff2346); } to { filter: drop-shadow(0 0 12px #ff2346); } }
   @keyframes flash { from { fill: #ffffff; } }
@@ -268,6 +272,12 @@
   <g id="fx" pointer-events="none"></g>
   <rect id="rushGlow" width="1200" height="720" fill="url(#vignette)"/>
   <rect id="blackout" width="1200" height="720" fill="#05060c" opacity="0" pointer-events="none"/>
+  <g id="meter" opacity="0" pointer-events="none">
+    <rect x="214" y="196" width="172" height="34" rx="10" fill="#23182b" opacity=".85"/>
+    <text x="234" y="219" text-anchor="middle" font-size="17">👑</text>
+    <rect x="254" y="207" width="122" height="12" rx="6" fill="#4a3f55"/>
+    <rect id="meterFill" x="254" y="207" width="0" height="12" rx="6" fill="#ffcf4a"/>
+  </g>
   <g id="bossHud" opacity="0" pointer-events="none">
     <rect x="420" y="62" width="360" height="62" rx="14" fill="#23182b" opacity=".85"/>
     <text x="600" y="86" text-anchor="middle" font-size="16" font-weight="900" letter-spacing="3" fill="#ffcf4a">👑 THE SPICE BARON</text>
@@ -327,6 +337,9 @@
 <script>
 const NS = 'http://www.w3.org/2000/svg';
 const SHIFT = 60, JARS = 11, RUSH_AT = 50, PERFECT = 500, DISGUISE_FROM = 20, DISGUISE_CHANCE = 0.3;
+// the Baron drops in at 40 s at the latest, so everyone gets ~20 s to fight him; filling the crown meter
+// (a catch adds 1, a jar carried out of the door takes 3 off) brings him in earlier, never before 25 s
+const BOSS_LATEST = 40, BOSS_EARLIEST = 25, HEAT_FULL = 32, HEAT_STEAL = 3;
 // waves only open new entrances; pace() below ramps speed smoothly so there is no sudden jump
 const WAVES = [
   { ways: ['doorL', 'doorR'] },
@@ -334,9 +347,11 @@ const WAVES = [
   { ways: ['doorL', 'doorR', 'rope', 'vent'], banner: '⚡⚡ VENTS!' },
   { ways: ['doorL', 'doorR', 'rope', 'vent'] },
 ];
-// pressing the right key is harder than tapping, so keys mode sends thieves about 15 % slower and sparser
-const KEYS_EASE = 1.15;
-const RUSH = { ways: ['doorL', 'doorR', 'rope', 'vent'], banner: '⏱ RUSH!' };
+// pressing the right key is harder than tapping, so keys mode sends thieves about 15 % slower and sparser;
+// a mouse can click fast, so tap mode sends them faster and denser
+const KEYS_EASE = 1.15, TAP_RUSH = 1.45;
+const modePace = () => G.mode === 'keys' ? 1 / KEYS_EASE : TAP_RUSH;
+const RUSH = { ways: ['doorL', 'doorR', 'rope', 'vent'], banner: '⏱ 10 SECONDS!' };
 const DAY = new Date().toLocaleDateString('en-CA');
 // every player gets the same thieves in the same order today; the demo and menus use Math.random
 function seeded(str) {
@@ -357,7 +372,7 @@ const RIVAL = (() => {
 const TITLES = [[1100, 'Legend'], [700, 'Head of Security'], [300, 'Night Guard'], [0, 'Rookie']];
 const titleFor = sc => (TITLES.find(([min]) => sc >= min) || TITLES[TITLES.length - 1])[1];
 function pace(t) {
-  const k = Math.min(1, t / SHIFT);
+  const k = Math.min(1, t / BOSS_LATEST);
   return { every: 1.5 - 0.95 * Math.pow(k, 1.15), speed: 0.95 + 0.8 * Math.pow(k, 1.1) };
 }
 const JAR_SPOTS = [[452, 590], [492, 590], [532, 590], [668, 590], [708, 590], [748, 590], [500, 562], [538, 562], [662, 562], [700, 562], [600, 590]];
@@ -479,7 +494,7 @@ function musicToggle() {
 }
 function musicTick() {
   if (!G || G.over) return musicStop();
-  const boss = !!(G.boss && G.boss.state === 'fight'), bpm = boss ? 172 : 108 + 50 * Math.min(1, G.t / SHIFT), sixteenth = 60 / bpm / 4;
+  const boss = !!(G.boss && G.boss.state === 'fight'), bpm = boss ? 172 : 108 + 50 * Math.min(1, G.t / BOSS_LATEST), sixteenth = 60 / bpm / 4;
   while (MUSIC.next < AC.currentTime + .12) { playStep(MUSIC.step, MUSIC.next, boss); MUSIC.next += sixteenth; MUSIC.step++; }
 }
 function tone(type, freq, t, dur, vol, slideTo) {
@@ -496,13 +511,13 @@ function noiseHit(t, dur, vol, freq) {
   src.connect(f).connect(g).connect(MUSIC.out); src.start(t); src.stop(t + dur + .02);
 }
 function playStep(n, t, boss) {
-  const s = n % 16, late = G.t / SHIFT > .5;
+  const s = n % 16, late = G.t > BOSS_LATEST / 2;
   if (s % 2 === 0) tone(boss ? 'sawtooth' : 'triangle', noteHz((boss ? BOSS_BASS : BASS)[s]), t, .18, boss ? .2 : .3);
   if (s % 4 === 0) tone('sine', 150, t, .16, .55, 40);
   if ((G.t > 15 || boss) && (s === 4 || s === 12)) noiseHit(t, .12, .25, 1500);
   if (s % 2 === 1 || late || boss) noiseHit(t, .03, .07, 7000);
-  if ((G.t > 30 || boss) && s % 2 === 0) tone('square', noteHz([12, 15, 19, 22][(n / 2 | 0) % 4] + (boss ? 1 : 0)), t, .08, .045);
-  if (!boss && G.t >= RUSH_AT - 10 && s === 0) tone('sawtooth', 880, t, .5, .035, 660);
+  if ((G.t > 25 || boss) && s % 2 === 0) tone('square', noteHz([12, 15, 19, 22][(n / 2 | 0) % 4] + (boss ? 1 : 0)), t, .08, .045);
+  if (!boss && G.t >= G.bossAt - 5 && s === 0) tone('sawtooth', 880, t, .5, .035, 660);
 }
 
 function renderJars() {
@@ -519,8 +534,16 @@ function renderJars() {
   });
 }
 function liveScore() { return G.jarOn.filter(Boolean).length * 100 + G.pts; }
+function renderMeter() {
+  const on = !!G && !G.over && !G.boss;
+  $('#meter').setAttribute('opacity', on ? 1 : 0);
+  if (!on) return;
+  $('#meterFill').setAttribute('width', 122 * (G.bossCalled ? 1 : Math.min(1, G.heat / HEAT_FULL)));
+  $('#meter').classList.toggle('full', G.bossCalled);
+}
 // the live row is "your score if the shift ended now", ranked against every saved best on this device
 function renderHud() {
+  renderMeter();
   const rows = TOP.map(e => ({ n: e.n, s: e.s, b: e.b }));
   if (RIVAL && !TOP.some(e => sameName(e.n, RIVAL.n))) rows.push({ n: RIVAL.n, s: RIVAL.s, rival: true });
   if (G) rows.push({ n: G.name, s: liveScore(), me: true });
@@ -572,6 +595,8 @@ function flyJar(from, to, color, onDone) {
 
 function makeChar(kind, variant) {
   const g = el('g', {}, ents);
+  // the Baron stays in front, so a guard walking in to patch the glass never hides his face
+  if (G && G.boss && !G.boss.dead) ents.insertBefore(g, G.boss.g);
   const inner = el('g', {}, g);
   el('circle', { class: 'hit', cx: 0, cy: -70, r: 58 }, inner);
   const body = el('g', { class: 'walk' }, inner);
@@ -598,7 +623,7 @@ function pickCode(o) {
   const free = freeKeys(o);
   if (!free.length) return false;
   o.code = free[codeRng() * free.length | 0];
-  if (o.kind === 'thief' && !o.dis && G.t >= 40 && codeRng() < .35) { const pool = keyPool(); o.code += pool[codeRng() * pool.length | 0]; }
+  if (o.kind === 'thief' && !o.dis && G.t >= 25 && codeRng() < .35) { const pool = keyPool(); o.code += pool[codeRng() * pool.length | 0]; }
   o.typed = 0;
   return true;
 }
@@ -657,7 +682,7 @@ function spawnThief(opts = {}) {
   const dis = !opts.hint && way.startsWith('door') && G.t >= DISGUISE_FROM && rand() < DISGUISE_CHANCE;
   const c = makeChar('thief', dis ? 'disguise' : null);
   const path = PATHS[way]();
-  const o = { kind: 'thief', way, ...c, path, i: 1, x: path[0].x, y: path[0].y, face: 1, sp: opts.sp || 120 * pace(G.t).speed / (G.mode === 'keys' ? KEYS_EASE : 1), state: 'in', worth: dis ? 20 : 10, dis };
+  const o = { kind: 'thief', way, ...c, path, i: 1, x: path[0].x, y: path[0].y, face: 1, sp: opts.sp || 120 * pace(G.t).speed * modePace(), state: 'in', worth: dis ? 20 : 10, dis };
   if (way === 'rope') { c.body.setAttribute('class', 'idle'); o.rope = el('line', { x1: o.x, y1: 0, x2: o.x, y2: 0, stroke: '#e9d9b0', 'stroke-width': 4 }, $('#ropes')); }
   if (opts.hint) o.hint = el('path', { class: 'hint', d: G.mode === 'keys' ? 'M-16 -240 h32 l-16 24 z' : 'M-16 -200 h32 l-16 24 z', fill: '#ffcf4a', stroke: '#23182b', 'stroke-width': 3 }, c.inner);
   c.g.addEventListener('pointerdown', ev => { ev.preventDefault(); ev.stopPropagation(); if (G.mode === 'tap') hitThief(o); });
@@ -674,6 +699,7 @@ function hitThief(o) {
   G.lastCatch = G.t;
   const gain = o.worth * G.combo;
   G.caught++; G.catchPts += o.worth; G.comboPts += gain - o.worth; G.pts += gain;
+  if (!G.bossCalled) G.heat++;
   poof(o.x, o.y, o.dis ? '#ffffff' : '#3b2f52');
   floatText(o.x, o.y - 160, `+${gain}` + (G.combo > 1 ? ` ×${G.combo}` : ''), '#ffcf4a');
   SFX.catch(G.combo);
@@ -768,22 +794,26 @@ function onKey(k) {
   hitThief(o);
 }
 
-// boss: a giant thief slides down the rope in the last 10 s; type his 6 digits before he reaches the dome
-// boss fight: the Spice Baron drops into the hall for the last 10 s. Three rounds of four arrows;
+// boss fight: the Spice Baron drops into the hall (see BOSS_LATEST). Three rounds of four arrows;
 // every right arrow is a punch, a wrong one (or being too slow) lets him swipe a jar.
 const BOSS_ROUNDS = 3, BOSS_ARROWS = 4, BOSS_ATTACK_EVERY = 2.6;
+const CROWN = 'M-24 -150 L-24 -176 L-12 -162 L0 -182 L12 -162 L24 -176 L24 -150 Z';
 const arrowSeq = () => Array.from({ length: BOSS_ARROWS }, () => ['ArrowLeft', 'ArrowUp', 'ArrowRight', 'ArrowDown'][codeRng() * 4 | 0]);
 function spawnBoss() {
   const c = makeChar('thief'); c.body.setAttribute('class', 'idle');
+  c.body.querySelector('.t').setAttribute('d', 'M-10 -74 Q2 -71 11 -79');
   c.body.querySelector('.bob').insertAdjacentHTML('afterbegin', '<path class="o" d="M-30 -66 Q-58 -10 -44 0 L44 0 Q58 -10 30 -66 Z" fill="#c0313d"/>');
   c.body.querySelector('.bob').insertAdjacentHTML('beforeend',
-    '<path class="o" d="M-24 -150 L-24 -176 L-12 -162 L0 -182 L12 -162 L24 -176 L24 -150 Z" fill="#ffcf4a"/>' +
-    '<path d="M-20 -72 Q-10 -64 0 -70 Q10 -64 20 -72" stroke="#23182b" stroke-width="5" fill="none" stroke-linecap="round"/>');
+    `<path class="o crown" d="${CROWN}" fill="#ffcf4a"/>` +
+    '<path class="stache" d="M-20 -72 Q-10 -64 0 -70 Q10 -64 20 -72" stroke="#23182b" stroke-width="5" fill="none" stroke-linecap="round"/>' +
+    // angry lids over the eyes, and a squint that flashes on every punch
+    '<path class="lids" d="M-22 -103 L-3 -94 L-3 -103 Z M22 -103 L3 -94 L3 -103 Z" fill="#23182b"/>' +
+    '<g class="ouch"><rect x="-27" y="-103" width="54" height="18" rx="9" fill="#23182b"/><path d="M-19 -99 L-9 -94 L-19 -89 M19 -99 L9 -94 L19 -89" stroke="#fff" stroke-width="3.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></g>');
   const o = { kind: 'thief', boss: true, way: 'drop', ...c, scale: 2.1, path: [{ x: 600, y: -120 }, { x: 600, y: 668, s: 12 }], i: 1, x: 600, y: -120, face: 1,
     sp: 60, state: 'drop', worth: 0, code: arrowSeq(), typed: 0, round: 0, hits: 0 };
   c.g.addEventListener('pointerdown', ev => { ev.preventDefault(); ev.stopPropagation(); if (G.mode === 'tap') bossTap(o); });
   G.ents.push(o); G.boss = o;
-  clearForBoss();
+  clearForBoss(); renderMeter();
   banner('👑 BOSS FIGHT!'); SFX.boss();
   game.classList.remove('shake'); void game.offsetWidth; game.classList.add('shake');
 }
@@ -924,10 +954,30 @@ function bossPunch(b) {
   if (b.hits >= BOSS_ROUNDS * BOSS_ARROWS) return bossKO(b);
   if (b.hits % BOSS_ARROWS === 0) {
     b.round++; b.attackAt = G.t + BOSS_ATTACK_EVERY;
+    bossBruise(b);
     say(b, ['Ouch!', 'Lucky punch!', 'Grrr!'][b.round - 1] || 'Ouch!');
     if (G.mode === 'keys') { b.code = arrowSeq(); b.typed = 0; }
   }
   if (G.mode === 'keys') renderBubble(b);
+}
+// he looks worse after every round: a bruise and a frown, then a black eye and his crown knocked off
+function bossBruise(b) {
+  const bob = b.body.querySelector('.bob'), crown = bob.querySelector('.crown');
+  if (b.round === 1) {
+    bob.querySelector('.t').setAttribute('d', 'M-9 -72 Q0 -79 10 -72');
+    bob.querySelector('.stache').setAttribute('d', 'M-20 -66 Q-10 -74 0 -70 Q10 -74 20 -66');
+    crown?.setAttribute('transform', 'rotate(-16 0 -160)');
+    bob.insertAdjacentHTML('beforeend', '<ellipse cx="-18" cy="-80" rx="9" ry="7" fill="#9b6fc7" opacity=".9"/>' +
+      '<path d="M30 -116 q7 11 0 15 q-7 -4 0 -15" fill="#7dd3fc" stroke="#23182b" stroke-width="2"/>');
+  } else if (b.round === 2 && crown) {
+    bob.insertAdjacentHTML('beforeend', '<circle cx="12" cy="-94" r="11" fill="none" stroke="#9b6fc7" stroke-width="5"/>' +
+      '<g transform="rotate(25 20 -78)"><rect x="8" y="-82" width="24" height="9" rx="4" fill="#ffe0b8" stroke="#23182b" stroke-width="2"/><rect x="15" y="-89" width="9" height="23" rx="4" fill="#ffe0b8" stroke="#23182b" stroke-width="2"/></g>');
+    crown.remove();
+    const s = b.scale || 1, x = b.x, y = b.y - 163 * s, g = el('g', {}, fxL);
+    el('path', { class: 'o', d: CROWN, fill: '#ffcf4a', transform: `scale(${s}) translate(0 163)` }, g);
+    FX.push({ el: g, t: 0, dur: 1.2, step: (f, k) => { f.el.setAttribute('transform', `translate(${x + 170 * k} ${y - 120 * k + (b.y - 30 - y + 120) * k * k}) rotate(${300 * k})`); f.el.setAttribute('opacity', k < .8 ? 1 : (1 - k) / .2); } });
+    floatText(x, y - 40, 'My crown!', '#ffcf4a');
+  }
 }
 function bossKO(b) {
   clearSpot();
@@ -938,8 +988,15 @@ function bossKO(b) {
   banner('K.O.!'); bossHud();
   [523, 659, 784, 1047].forEach((f, i) => setTimeout(() => beep(f, .18, 'triangle', .16), i * 110));
   (b.jars || []).forEach(i => flyJar({ x: b.x, y: b.y - 250 }, { x: JAR_SPOTS[i][0], y: JAR_SPOTS[i][1] }, JAR_COLORS[i], () => { G.jarOn[i] = true; renderJars(); renderHud(); }));
-  // bandage across the beanie and stars spinning round his head
-  b.body.querySelector('.bob').insertAdjacentHTML('beforeend',
+  // knocked out: X eyes, a wobbly mouth, tears, a bandage across the beanie and stars spinning round his head
+  const bob = b.body.querySelector('.bob');
+  bob.querySelectorAll('.blink, .pupils, .lids, .ouch').forEach(e => e.remove());
+  bob.querySelector('.t').setAttribute('d', 'M-11 -73 Q-5.5 -79 0 -73 Q5.5 -67 11 -73');
+  bob.querySelector('.stache').setAttribute('d', 'M-20 -64 Q-10 -74 0 -70 Q10 -74 20 -64');
+  bob.insertAdjacentHTML('beforeend',
+    '<path d="M-17 -99 l10 10 m0 -10 l-10 10 M7 -99 l10 10 m0 -10 l-10 10" stroke="#fff" stroke-width="3.5" stroke-linecap="round"/>' +
+    '<path d="M-24 -84 q-5 9 0 12 q5 -3 0 -12 M24 -84 q-5 9 0 12 q5 -3 0 -12" fill="#7dd3fc" stroke="#23182b" stroke-width="1.5"/>');
+  bob.insertAdjacentHTML('beforeend',
     '<rect x="-36" y="-124" width="72" height="13" rx="6" fill="#fff" stroke="#23182b" stroke-width="3" transform="rotate(-16 0 -118)"/>' +
     '<rect x="8" y="-90" width="22" height="9" rx="4" fill="#fff" stroke="#23182b" stroke-width="2" transform="rotate(30 19 -86)"/>' +
     '<g class="dizzy"><path d="M-40 -168 l5 -11 l5 11 l-10 -7 h10 z M30 -176 l5 -11 l5 11 l-10 -7 h10 z M-6 -196 l5 -11 l5 11 l-10 -7 h10 z" fill="#ffcf4a" stroke="#23182b" stroke-width="2"/></g>');
@@ -970,7 +1027,7 @@ function bossAttack(b) {
 }
 
 // WarioWare-style interruptions: the shift pauses for a 3-second mini challenge
-const MICRO_AT = [13, 28, 43];
+const MICRO_AT = [10, 20, 30];
 function startMicro(type) {
   const m = G.micro = { type, t: 0, dur: type === 'fake' ? 3.6 : 3.2, n: 0 };
   const body = $('#mBody'); body.innerHTML = '';
@@ -1032,23 +1089,29 @@ function update(dt) {
   if (sec !== G.lastSec) { G.lastSec = sec; $('#secs').textContent = sec; if (G.t >= RUSH_AT) SFX.tick(); }
   if (left <= 0) return endGame(G.jarOn.some(Boolean));
 
-  const wave = G.t >= RUSH_AT ? RUSH : WAVES[Math.min(WAVES.length - 1, Math.floor(G.t / 15))];
+  const wave = G.t >= RUSH_AT ? RUSH : WAVES[Math.min(WAVES.length - 1, Math.floor(G.t / 10))];
   if (wave !== G.wave) { G.wave = wave; if (wave.banner) banner(wave.banner); scene.classList.toggle('rush', wave === RUSH); }
 
+  if (!G.bossCalled && G.heat >= HEAT_FULL && G.t >= BOSS_EARLIEST - 4) {
+    G.bossCalled = true; G.bossAt = Math.max(BOSS_EARLIEST, G.t + 4);
+    banner('😠 TOO GOOD!'); SFX.oops(); renderMeter();
+  }
+  if (!G.bossCalled && G.t >= G.bossAt - 3) { G.bossCalled = true; renderMeter(); }
   if (G.mode === 'keys') {
-    if (G.microDone < MICRO_AT.length && G.t >= MICRO_AT[G.microDone]) return startMicro(G.microOrder[G.microDone++]);
-    if (!G.blackDone && G.t >= 35) { G.blackDone = true; G.blackUntil = G.t + 3; banner('💡 LIGHTS OUT!'); }
+    // no mini-game or blackout once the Baron is on his way
+    if (!G.bossCalled && G.microDone < MICRO_AT.length && G.t >= MICRO_AT[G.microDone]) return startMicro(G.microOrder[G.microDone++]);
+    if (!G.bossCalled && !G.blackDone && G.t >= 25) { G.blackDone = true; G.blackUntil = G.t + 3; banner('💡 LIGHTS OUT!'); }
     $('#blackout').setAttribute('opacity', G.t < (G.blackUntil || 0) ? .9 : 0);
   }
-  for (const [at, text] of [[45, '👑 BOSS IN 5…'], [47, '3…'], [48, '2…'], [49, '1…']])
-    if (G.t >= at && !G.warned.has(at)) { G.warned.add(at); banner(text); SFX.tick(); }
-  if (!G.boss && G.t >= RUSH_AT) spawnBoss();
+  for (const n of [3, 2, 1])
+    if (G.t >= G.bossAt - n && !G.warned.has(n)) { G.warned.add(n); banner(n === 3 ? '👑 BOSS IN 3…' : n + '…'); SFX.tick(); }
+  if (!G.boss && G.t >= G.bossAt) spawnBoss();
   if (!G.guide && !G.boss && G.t >= .3) { G.guide = true; spawnThief({ way: 'doorL', sp: 60, hint: true }); }
   if (!G.guideGuard && G.t >= 1.6) { G.guideGuard = true; crack(); spawnGuard(G.cracks[G.cracks.length - 1], true); }
   if (G.t >= 3.5 && G.t >= G.next) {
     // never two characters on the same key: wait for a free key before letting the next thief in
     if (G.boss || (G.mode === 'keys' && freeKeys().length < 2)) G.next = G.t + .25;
-    else { spawnThief(); G.next = G.t + pace(G.t).every * (G.mode === 'keys' ? KEYS_EASE : 1); }
+    else { spawnThief(); G.next = G.t + pace(G.t).every / modePace(); }
   }
   // at most two guards on the floor at once, so they never hide the thieves
   const busy = G.ents.filter(o => o.kind === 'guard' && !o.dead && o.state !== 'out').length;
@@ -1075,7 +1138,10 @@ function update(dt) {
       }
       if (o.rope) { o.rope.setAttribute('x1', o.x); o.rope.setAttribute('x2', o.x); o.rope.setAttribute('y2', Math.max(0, o.y - 150)); }
       if (arrived && o.state === 'in') steal(o);
-      else if (arrived && o.state === 'out') { o.dead = true; o.g.remove(); o.rope?.remove(); o.bub?.remove(); if (G.lock === o) G.lock = null; continue; }
+      else if (arrived && o.state === 'out') {
+        if (o.jar != null && !G.bossCalled) { G.heat = Math.max(0, G.heat - HEAT_STEAL); renderMeter(); }
+        o.dead = true; o.g.remove(); o.rope?.remove(); o.bub?.remove(); if (G.lock === o) G.lock = null; continue;
+      }
       if (G.over) return;
     } else {
       if (o.state === 'in' && follow(o, dt)) {
@@ -1147,7 +1213,7 @@ function startGame(mode) {
   G = { t: 0, jarOn: Array(JARS).fill(true), pts: 0, caught: 0, patched: 0, oops: 0, combo: 0, lastCatch: -9, catchPts: 0, comboPts: 0, triples: 0,
     ents: [], cracks: [], over: false, wave: null, next: 0, lastSec: 61, name: name || 'Guest', mode: MODE,
     lock: null, micro: null, microDone: 0, microWins: 0, boss: null, bossDown: false, warned: new Set(), spot: null, spotNext: 0, tapRound: -1,
-    lost: { thief: 0, boss: 0, micro: 0 }, lowWarned: 0, victory: false };
+    lost: { thief: 0, boss: 0, micro: 0 }, lowWarned: 0, victory: false, heat: 0, bossCalled: false, bossAt: BOSS_LATEST };
   G.microOrder = ['mash', 'arrows', 'fake'].sort(() => microRng() - .5);
   scene.classList.remove('rush');
   renderJars(); renderHud();
@@ -1160,7 +1226,7 @@ function endGame(win) {
   musicStop();
   scene.classList.remove('rush');
   $('#micro').classList.remove('on'); $('#blackout').setAttribute('opacity', 0); codesL.innerHTML = ''; $('#kbd').innerHTML = ''; $('#bossHud').setAttribute('opacity', 0); $('#spotL').innerHTML = '';
-  G.spot = null;
+  G.spot = null; renderMeter();
   outro(win, () => finishGame(win));
 }
 // a 2-second scene so the player sees why the run ended: lost = alarm, the glass shatters, the recipe flies out
@@ -1202,9 +1268,11 @@ function finishGame(win) {
   $('#rival').textContent = RIVAL ? (total > RIVAL.s ? `⚔️ You beat ${RIVAL.n} (${RIVAL.s})!` : `⚔️ ${RIVAL.n} still leads by ${RIVAL.s - total}`) : '';
   $('#toast').textContent = '';
   const lostBy = [G.lost.thief && `🦹 ${G.lost.thief} by thieves`, G.lost.boss && `👑 ${G.lost.boss} by the Baron`, G.lost.micro && `⚡ ${G.lost.micro} in mini-games`].filter(Boolean).join(' · ');
+  // G.lost counts every grab, including jars the player won back
+  const keptAll = G.jarOn.every(Boolean);
   $('#why').textContent = win
-    ? (G.victory ? 'You beat the Spice Baron and saved the recipe!' : `You held the vault for the whole shift.`) + (lostBy ? ` Jars lost: ${lostBy}.` : ' Not a single jar lost!')
-    : `All 11 jars were taken, so the recipe was stolen. Jars lost: ${lostBy || 'none'}.`;
+    ? (G.victory ? 'You beat the Spice Baron and saved the recipe!' : `You held the vault for the whole shift.`) + (keptAll ? (lostBy ? ' Every grabbed jar is back on the shelf!' : ' Not a single jar lost!') : ` Jars grabbed: ${lostBy}.`)
+    : `All 11 jars were taken, so the recipe was stolen. Jars grabbed: ${lostBy || 'none'}.`;
   const rank = 1 + top.filter(e => e.s > total && !sameName(e.n, G.name)).length;
   $('#endKick').textContent = win ? 'SHIFT COMPLETE' : 'THE SHELVES ARE EMPTY';
   const t = $('#endTitle'); t.textContent = win ? 'Recipe safe!' : 'Recipe stolen!'; t.className = 'title ' + (win ? 'win' : 'lose');
