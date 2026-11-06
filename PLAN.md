@@ -46,11 +46,11 @@ Total: 38 minutes.
 Only two of us, so roles are shared. **Trang:** producer (owns this file, the clock and the cut list) and driver. **My:** playtester and designer, and driver for items 2 and 4. We swap the keyboard about every 20 minutes. One MVP item per prompt; whoever didn't write the prompt plays the build.
 
 ## Milestones
-- 0:30 Plan link (this file)
-- 0:55 First playable: MVP items 1 to 3
-- 1:35 Final: all MVP items
+- 0:30 (10:14) Plan link (this file)
+- 0:55 (10:39) First playable: MVP items 1 to 3
+- 1:35 (11:19) Final: all MVP items
 
 ## Change log (fill in while you build)
 | Time | Change | Why |
 |------|--------|-----|
-| 0:16 | Plan locked: Vault Guard picked over Sauce Memory Rush and Spice Heist 60 | Lowest build risk for a 2-person team; one tap input works the same on phone and laptop; Spice Heist was too close to the host's example |
+| 0:10 | Plan locked: Vault Guard picked over Sauce Memory Rush and Spice Heist 60 | Lowest build risk for a 2-person team; one tap input works the same on phone and laptop; Spice Heist was too close to the host's example |
